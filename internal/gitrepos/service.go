@@ -327,6 +327,11 @@ func (s *Service) GetSettings() *config.GitReposSettings {
 	return s.settings
 }
 
+// SetGitClient allows injecting a custom git client for testing.
+func (s *Service) SetGitClient(client *GitClient) {
+	s.git = client
+}
+
 // Close releases all resources.
 func (s *Service) Close() error {
 	s.mu.Lock()
