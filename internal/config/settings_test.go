@@ -2,8 +2,10 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 )
@@ -452,6 +454,453 @@ func TestValidateSettings_InvalidTransport(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "transport must be") {
 				t.Errorf("Expected 'transport must be' in error, got: %v", err)
+			}
+		})
+	}
+}
+
+// --- GitReposSettings Tests ---
+
+func TestLoadSettings_GitReposDefaults(t *testing.T) {
+	// Clear any existing env vars
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_ENABLED")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_URLS")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_BASE_DIR")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_SYNC_INTERVAL")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_MAX_FILE_SIZE")
+	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_MAX_RESULTS")
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if settings.GitRepos.Enabled {
+		t.Error("Expected git repos disabled by default")
+	}
+
+	if len(settings.GitRepos.URLs) != 0 {
+		t.Errorf("Expected empty URLs by default, got %d", len(settings.GitRepos.URLs))
+	}
+
+	// Check default base dir contains .relic-mcp
+	if !strings.HasSuffix(settings.GitRepos.BaseDir, ".relic-mcp") {
+		t.Errorf("Expected base dir to end with '.relic-mcp', got '%s'", settings.GitRepos.BaseDir)
+	}
+
+	if settings.GitRepos.SyncInterval != 15*time.Minute {
+		t.Errorf("Expected sync interval 15m, got %v", settings.GitRepos.SyncInterval)
+	}
+
+	if settings.GitRepos.SyncTimeout != 60*time.Second {
+		t.Errorf("Expected sync timeout 60s, got %v", settings.GitRepos.SyncTimeout)
+	}
+
+	if settings.GitRepos.MaxFileSize != 256*1024 {
+		t.Errorf("Expected max file size 256KB, got %d", settings.GitRepos.MaxFileSize)
+	}
+
+	if settings.GitRepos.MaxResults != 20 {
+		t.Errorf("Expected max results 20, got %d", settings.GitRepos.MaxResults)
+	}
+}
+
+func TestLoadSettings_GitReposEnvVars(t *testing.T) {
+	t.Setenv("RELIC_MCP_GIT_REPOS_ENABLED", "true")
+	t.Setenv("RELIC_MCP_GIT_REPOS_URLS", "git@github.com:org/repo1.git,git@github.com:org/repo2.git")
+	t.Setenv("RELIC_MCP_GIT_REPOS_BASE_DIR", "/custom/path")
+	t.Setenv("RELIC_MCP_GIT_REPOS_SYNC_INTERVAL", "30m")
+	t.Setenv("RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT", "120s")
+	t.Setenv("RELIC_MCP_GIT_REPOS_MAX_FILE_SIZE", "512000")
+	t.Setenv("RELIC_MCP_GIT_REPOS_MAX_RESULTS", "50")
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if !settings.GitRepos.Enabled {
+		t.Error("Expected git repos enabled")
+	}
+
+	if len(settings.GitRepos.URLs) != 2 {
+		t.Fatalf("Expected 2 URLs, got %d", len(settings.GitRepos.URLs))
+	}
+	if settings.GitRepos.URLs[0] != "git@github.com:org/repo1.git" {
+		t.Errorf("Expected first URL 'git@github.com:org/repo1.git', got '%s'", settings.GitRepos.URLs[0])
+	}
+	if settings.GitRepos.URLs[1] != "git@github.com:org/repo2.git" {
+		t.Errorf("Expected second URL 'git@github.com:org/repo2.git', got '%s'", settings.GitRepos.URLs[1])
+	}
+
+	if settings.GitRepos.BaseDir != "/custom/path" {
+		t.Errorf("Expected base dir '/custom/path', got '%s'", settings.GitRepos.BaseDir)
+	}
+
+	if settings.GitRepos.SyncInterval != 30*time.Minute {
+		t.Errorf("Expected sync interval 30m, got %v", settings.GitRepos.SyncInterval)
+	}
+
+	if settings.GitRepos.SyncTimeout != 120*time.Second {
+		t.Errorf("Expected sync timeout 120s, got %v", settings.GitRepos.SyncTimeout)
+	}
+
+	if settings.GitRepos.MaxFileSize != 512000 {
+		t.Errorf("Expected max file size 512000, got %d", settings.GitRepos.MaxFileSize)
+	}
+
+	if settings.GitRepos.MaxResults != 50 {
+		t.Errorf("Expected max results 50, got %d", settings.GitRepos.MaxResults)
+	}
+}
+
+func TestLoadSettings_GitReposURLsTrimSpaces(t *testing.T) {
+	t.Setenv("RELIC_MCP_GIT_REPOS_URLS", " git@github.com:org/repo1.git , git@github.com:org/repo2.git ")
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if len(settings.GitRepos.URLs) != 2 {
+		t.Fatalf("Expected 2 URLs, got %d", len(settings.GitRepos.URLs))
+	}
+	if settings.GitRepos.URLs[0] != "git@github.com:org/repo1.git" {
+		t.Errorf("Expected trimmed URL, got '%s'", settings.GitRepos.URLs[0])
+	}
+	if settings.GitRepos.URLs[1] != "git@github.com:org/repo2.git" {
+		t.Errorf("Expected trimmed URL, got '%s'", settings.GitRepos.URLs[1])
+	}
+}
+
+func TestLoadSettings_GitReposURLsFilterEmpty(t *testing.T) {
+	t.Setenv("RELIC_MCP_GIT_REPOS_URLS", "git@github.com:org/repo1.git,,git@github.com:org/repo2.git,")
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if len(settings.GitRepos.URLs) != 2 {
+		t.Fatalf("Expected 2 URLs (empty filtered out), got %d: %v", len(settings.GitRepos.URLs), settings.GitRepos.URLs)
+	}
+}
+
+func TestLoadSettings_GitReposBaseDirExpandHome(t *testing.T) {
+	t.Setenv("RELIC_MCP_GIT_REPOS_BASE_DIR", "~/custom-relic")
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	home, _ := os.UserHomeDir()
+	expected := filepath.Join(home, "custom-relic")
+	if settings.GitRepos.BaseDir != expected {
+		t.Errorf("Expected base dir '%s', got '%s'", expected, settings.GitRepos.BaseDir)
+	}
+}
+
+func TestLoadSettingsWithFlags_GitReposFlags(t *testing.T) {
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.Bool("git-repos-enabled", false, "")
+	flags.StringSlice("git-repos-urls", nil, "")
+	flags.String("git-repos-base-dir", "", "")
+	flags.Duration("git-repos-sync-interval", 0, "")
+	flags.Duration("git-repos-sync-timeout", 0, "")
+	flags.Int64("git-repos-max-file-size", 0, "")
+	flags.Int("git-repos-max-results", 0, "")
+
+	_ = flags.Set("git-repos-enabled", "true")
+	_ = flags.Set("git-repos-urls", "git@github.com:org/repo.git")
+	_ = flags.Set("git-repos-base-dir", "/flag/path")
+	_ = flags.Set("git-repos-sync-interval", "5m")
+	_ = flags.Set("git-repos-sync-timeout", "30s")
+	_ = flags.Set("git-repos-max-file-size", "1024")
+	_ = flags.Set("git-repos-max-results", "10")
+
+	settings, err := LoadSettingsWithFlags(flags)
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if !settings.GitRepos.Enabled {
+		t.Error("Expected git repos enabled from flag")
+	}
+
+	if len(settings.GitRepos.URLs) != 1 || settings.GitRepos.URLs[0] != "git@github.com:org/repo.git" {
+		t.Errorf("Expected URL from flag, got %v", settings.GitRepos.URLs)
+	}
+
+	if settings.GitRepos.BaseDir != "/flag/path" {
+		t.Errorf("Expected base dir '/flag/path', got '%s'", settings.GitRepos.BaseDir)
+	}
+
+	if settings.GitRepos.SyncInterval != 5*time.Minute {
+		t.Errorf("Expected sync interval 5m, got %v", settings.GitRepos.SyncInterval)
+	}
+
+	if settings.GitRepos.SyncTimeout != 30*time.Second {
+		t.Errorf("Expected sync timeout 30s, got %v", settings.GitRepos.SyncTimeout)
+	}
+
+	if settings.GitRepos.MaxFileSize != 1024 {
+		t.Errorf("Expected max file size 1024, got %d", settings.GitRepos.MaxFileSize)
+	}
+
+	if settings.GitRepos.MaxResults != 10 {
+		t.Errorf("Expected max results 10, got %d", settings.GitRepos.MaxResults)
+	}
+}
+
+func TestLoadSettingsWithFlags_GitReposFlagsOverrideEnv(t *testing.T) {
+	t.Setenv("RELIC_MCP_GIT_REPOS_ENABLED", "false")
+	t.Setenv("RELIC_MCP_GIT_REPOS_MAX_RESULTS", "100")
+
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.Bool("git-repos-enabled", false, "")
+	flags.Int("git-repos-max-results", 0, "")
+
+	_ = flags.Set("git-repos-enabled", "true")
+	_ = flags.Set("git-repos-max-results", "25")
+
+	settings, err := LoadSettingsWithFlags(flags)
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+
+	if !settings.GitRepos.Enabled {
+		t.Error("Expected flag to override env for enabled")
+	}
+
+	if settings.GitRepos.MaxResults != 25 {
+		t.Errorf("Expected flag to override env for max results, got %d", settings.GitRepos.MaxResults)
+	}
+}
+
+// --- GitRepos Validation Tests ---
+
+func TestValidateSettings_GitReposDisabled(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos:  GitReposSettings{Enabled: false},
+	}
+	if err := ValidateSettings(s); err != nil {
+		t.Errorf("Expected no error for disabled git repos, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposValid(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+	if err := ValidateSettings(s); err != nil {
+		t.Errorf("Expected no error for valid git repos config, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposEnabledNoURLs(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for enabled git repos without URLs")
+	}
+	if !strings.Contains(err.Error(), "requires at least one repository URL") {
+		t.Errorf("Expected 'requires at least one repository URL' in error, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposInvalidSyncInterval(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 0,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for zero sync interval")
+	}
+	if !strings.Contains(err.Error(), "sync-interval must be positive") {
+		t.Errorf("Expected 'sync-interval must be positive' in error, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposInvalidSyncTimeout(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  0,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for zero sync timeout")
+	}
+	if !strings.Contains(err.Error(), "sync-timeout must be positive") {
+		t.Errorf("Expected 'sync-timeout must be positive' in error, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposInvalidMaxFileSize(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  0,
+			MaxResults:   20,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for zero max file size")
+	}
+	if !strings.Contains(err.Error(), "max-file-size must be positive") {
+		t.Errorf("Expected 'max-file-size must be positive' in error, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposInvalidMaxResults(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   0,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for zero max results")
+	}
+	if !strings.Contains(err.Error(), "max-results must be positive") {
+		t.Errorf("Expected 'max-results must be positive' in error, got: %v", err)
+	}
+}
+
+func TestValidateSettings_GitReposEmptyBaseDir(t *testing.T) {
+	s := &Settings{
+		Transport: "stdio",
+		Auth:      AuthSettings{Type: AuthTypeNone},
+		GitRepos: GitReposSettings{
+			Enabled:      true,
+			URLs:         []string{"git@github.com:org/repo.git"},
+			BaseDir:      "",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for empty base dir")
+	}
+	if !strings.Contains(err.Error(), "base-dir cannot be empty") {
+		t.Errorf("Expected 'base-dir cannot be empty' in error, got: %v", err)
+	}
+}
+
+// --- Helper Function Tests ---
+
+func TestExpandHomeDir(t *testing.T) {
+	home, _ := os.UserHomeDir()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"tilde prefix", "~/test", filepath.Join(home, "test")},
+		{"tilde only", "~", home},
+		{"no tilde", "/absolute/path", "/absolute/path"},
+		{"tilde in middle", "/path/~/test", "/path/~/test"},
+		{"relative path", "relative/path", "relative/path"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := expandHomeDir(tt.input)
+			if result != tt.expected {
+				t.Errorf("expandHomeDir(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFilterEmptyStrings(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{"no empties", []string{"a", "b", "c"}, []string{"a", "b", "c"}},
+		{"with empties", []string{"a", "", "b", "", "c"}, []string{"a", "b", "c"}},
+		{"all empties", []string{"", "", ""}, nil},
+		{"nil input", nil, nil},
+		{"single empty", []string{""}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterEmptyStrings(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("filterEmptyStrings(%v) = %v, want %v", tt.input, result, tt.expected)
+				return
+			}
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("filterEmptyStrings(%v) = %v, want %v", tt.input, result, tt.expected)
+					break
+				}
 			}
 		})
 	}
