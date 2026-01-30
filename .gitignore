@@ -1,0 +1,21 @@
+# Binaries for programs and plugins
+bin/
+build/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+*.html
+
+# OS specific files
+.DS_Store
+
+# Editor / IDE files
+.idea/
+.vscode/
+
+# Local configuration
+.env

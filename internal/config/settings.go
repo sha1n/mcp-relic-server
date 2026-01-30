@@ -1,0 +1,144 @@
+package config
+
+import (
+	"errors"
+	"os"
+	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+)
+
+// Auth type constants
+const (
+	AuthTypeNone   = "none"
+	AuthTypeBasic  = "basic"
+	AuthTypeAPIKey = "apikey"
+)
+
+// AuthSettings configuration for authentication
+type AuthSettings struct {
+	Type    string            `mapstructure:"type"` // AuthTypeNone, AuthTypeBasic, or AuthTypeAPIKey
+	Basic   BasicAuthSettings `mapstructure:"basic"`
+	APIKeys []string          `mapstructure:"api_keys"`
+}
+
+// BasicAuthSettings configuration for basic auth
+type BasicAuthSettings struct {
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+}
+
+// Settings application settings
+type Settings struct {
+	Transport string       `mapstructure:"transport"`
+	Host      string       `mapstructure:"host"`
+	Port      int          `mapstructure:"port"`
+	Auth      AuthSettings `mapstructure:"auth"`
+}
+
+// LoadSettings loads settings from environment variables and optional .env file
+func LoadSettings() (*Settings, error) {
+	return LoadSettingsWithFlags(nil)
+}
+
+// LoadSettingsWithFlags loads settings with optional CLI flag overrides.
+// Priority: CLI flags > environment variables > .env file > defaults.
+// If flags is nil, only env vars and defaults are used.
+func LoadSettingsWithFlags(flags *pflag.FlagSet) (*Settings, error) {
+	v := viper.New()
+
+	// Default values
+	v.SetDefault("transport", "stdio")
+	v.SetDefault("host", "0.0.0.0")
+	v.SetDefault("port", 8080)
+	v.SetDefault("auth.type", AuthTypeNone)
+
+	// Environment variables
+	v.SetEnvPrefix("RELIC_MCP")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// Bind specific env vars for nested config
+	_ = v.BindEnv("auth.type", "RELIC_MCP_AUTH_TYPE")
+	_ = v.BindEnv("auth.basic.username", "RELIC_MCP_AUTH_BASIC_USERNAME")
+	_ = v.BindEnv("auth.basic.password", "RELIC_MCP_AUTH_BASIC_PASSWORD")
+	_ = v.BindEnv("auth.api_keys", "RELIC_MCP_AUTH_API_KEYS")
+
+	// Bind CLI flags if provided (highest priority)
+	if flags != nil {
+		_ = v.BindPFlag("transport", flags.Lookup("transport"))
+		_ = v.BindPFlag("host", flags.Lookup("host"))
+		_ = v.BindPFlag("port", flags.Lookup("port"))
+		_ = v.BindPFlag("auth.type", flags.Lookup("auth-type"))
+		_ = v.BindPFlag("auth.basic.username", flags.Lookup("auth-basic-username"))
+		_ = v.BindPFlag("auth.basic.password", flags.Lookup("auth-basic-password"))
+		_ = v.BindPFlag("auth.api_keys", flags.Lookup("auth-api-keys"))
+	}
+
+	// Helper to look for .env file
+	v.SetConfigName(".env")
+	v.SetConfigType("env")
+	v.AddConfigPath(".")
+	_ = v.ReadInConfig() // Ignore error if .env doesn't exist
+
+	var settings Settings
+	if err := v.Unmarshal(&settings); err != nil {
+		return nil, err
+	}
+
+	// Handle explicit parsing of API keys if provided via env var as comma-separated string
+	apiKeysEnv := os.Getenv("RELIC_MCP_AUTH_API_KEYS")
+	if apiKeysEnv != "" {
+		if len(settings.Auth.APIKeys) == 0 || (len(settings.Auth.APIKeys) == 1 && strings.Contains(settings.Auth.APIKeys[0], ",")) {
+			settings.Auth.APIKeys = strings.Split(apiKeysEnv, ",")
+		}
+	}
+
+	// Trim spaces from API keys
+	for i := range settings.Auth.APIKeys {
+		settings.Auth.APIKeys[i] = strings.TrimSpace(settings.Auth.APIKeys[i])
+	}
+
+	return &settings, nil
+}
+
+// ValidateSettings checks for conflicting configurations.
+// Returns an error if the settings contain mutually exclusive or incomplete auth config.
+func ValidateSettings(s *Settings) error {
+	// Validate transport type
+	switch s.Transport {
+	case "stdio", "sse":
+		// valid
+	default:
+		return errors.New("transport must be 'stdio' or 'sse', got: " + s.Transport)
+	}
+
+	hasBasicCreds := s.Auth.Basic.Username != "" || s.Auth.Basic.Password != ""
+	hasAPIKeys := len(s.Auth.APIKeys) > 0
+
+	switch s.Auth.Type {
+	case AuthTypeNone, "":
+		if hasBasicCreds || hasAPIKeys {
+			return errors.New("auth-type 'none' is incompatible with auth credentials")
+		}
+	case AuthTypeBasic:
+		if hasAPIKeys {
+			return errors.New("auth-type 'basic' is mutually exclusive with auth-api-keys")
+		}
+		if s.Auth.Basic.Username == "" || s.Auth.Basic.Password == "" {
+			return errors.New("auth-type 'basic' requires both username and password")
+		}
+	case AuthTypeAPIKey:
+		if hasBasicCreds {
+			return errors.New("auth-type 'apikey' is mutually exclusive with basic auth credentials")
+		}
+		if !hasAPIKeys {
+			return errors.New("auth-type 'apikey' requires at least one API key")
+		}
+	default:
+		return errors.New("unknown auth-type: " + s.Auth.Type)
+	}
+
+	return nil
+}
