@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,7 @@ type Manifest struct {
 	Version  int                  `json:"version"`
 	LastSync time.Time            `json:"last_sync"`
 	Repos    map[string]RepoState `json:"repos"`
+	mu       sync.RWMutex         `json:"-"`
 }
 
 // RepoState stores the sync state for a single repository.
@@ -68,16 +70,18 @@ func LoadManifest(path string) (*Manifest, error) {
 // Save writes the manifest to disk atomically.
 // Uses write-to-temp + rename pattern to prevent corruption.
 func (m *Manifest) Save(path string) error {
+	m.mu.RLock()
+	// Marshal to JSON with indentation for readability
+	data, err := json.MarshalIndent(m, "", "  ")
+	m.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("failed to marshal manifest: %w", err)
+	}
+
 	// Ensure parent directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create manifest directory: %w", err)
-	}
-
-	// Marshal to JSON with indentation for readability
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 
 	// Write to temporary file first
@@ -98,6 +102,8 @@ func (m *Manifest) Save(path string) error {
 
 // GetRepoState returns the state for a repository, creating it if it doesn't exist.
 func (m *Manifest) GetRepoState(repoID string) *RepoState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	state, ok := m.Repos[repoID]
 	if !ok {
 		state = RepoState{}
@@ -108,22 +114,30 @@ func (m *Manifest) GetRepoState(repoID string) *RepoState {
 
 // SetRepoState updates the state for a repository.
 func (m *Manifest) SetRepoState(repoID string, state RepoState) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.Repos[repoID] = state
 }
 
 // HasRepo returns true if the repository exists in the manifest.
 func (m *Manifest) HasRepo(repoID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, ok := m.Repos[repoID]
 	return ok
 }
 
 // RemoveRepo removes a repository from the manifest.
 func (m *Manifest) RemoveRepo(repoID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.Repos, repoID)
 }
 
 // GetRepoIDs returns a list of all repository IDs in the manifest.
 func (m *Manifest) GetRepoIDs() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	ids := make([]string, 0, len(m.Repos))
 	for id := range m.Repos {
 		ids = append(ids, id)
@@ -134,6 +148,9 @@ func (m *Manifest) GetRepoIDs() []string {
 // RemoveStaleRepos removes repositories not in the given URL list.
 // Returns the list of removed repository IDs.
 func (m *Manifest) RemoveStaleRepos(urls []string) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Build set of expected repo IDs from URLs
 	expected := make(map[string]bool)
 	for _, url := range urls {
@@ -159,11 +176,15 @@ func (m *Manifest) RemoveStaleRepos(urls []string) []string {
 
 // UpdateLastSync updates the last sync timestamp.
 func (m *Manifest) UpdateLastSync() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.LastSync = time.Now()
 }
 
 // NeedsSyncCheck returns true if enough time has passed since the last sync.
 func (m *Manifest) NeedsSyncCheck(interval time.Duration) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.LastSync.IsZero() {
 		return true
 	}
@@ -172,6 +193,8 @@ func (m *Manifest) NeedsSyncCheck(interval time.Duration) bool {
 
 // GetReposWithErrors returns a list of repositories that have errors.
 func (m *Manifest) GetReposWithErrors() map[string]string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	result := make(map[string]string)
 	for repoID, state := range m.Repos {
 		if state.Error != "" {
@@ -183,6 +206,8 @@ func (m *Manifest) GetReposWithErrors() map[string]string {
 
 // ClearRepoError clears the error for a repository.
 func (m *Manifest) ClearRepoError(repoID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if state, ok := m.Repos[repoID]; ok {
 		state.Error = ""
 		m.Repos[repoID] = state
@@ -191,6 +216,8 @@ func (m *Manifest) ClearRepoError(repoID string) {
 
 // SetRepoError sets the error for a repository.
 func (m *Manifest) SetRepoError(repoID string, err string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if state, ok := m.Repos[repoID]; ok {
 		state.Error = err
 		m.Repos[repoID] = state
