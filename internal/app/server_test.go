@@ -23,9 +23,6 @@ func TestNewSSEServer_NoAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if srv == nil {
-		t.Fatal("Expected server to be created")
-	}
 	if srv.Addr != "localhost:8080" {
 		t.Errorf("Expected addr 'localhost:8080', got '%s'", srv.Addr)
 	}
@@ -51,8 +48,8 @@ func TestNewSSEServer_BasicAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if srv == nil {
-		t.Fatal("Expected server to be created")
+	if srv.Addr != "localhost:9090" {
+		t.Errorf("Expected addr 'localhost:9090', got '%s'", srv.Addr)
 	}
 }
 
@@ -73,8 +70,8 @@ func TestNewSSEServer_APIKeyAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if srv == nil {
-		t.Fatal("Expected server to be created")
+	if srv.Addr != "localhost:9090" {
+		t.Errorf("Expected addr 'localhost:9090', got '%s'", srv.Addr)
 	}
 }
 
