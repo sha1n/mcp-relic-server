@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sha1n/mcp-relic-server/internal/config"
@@ -197,6 +198,73 @@ func TestCreateMCPServer(t *testing.T) {
 	}
 	if cleanup != nil {
 		cleanup()
+	}
+}
+
+func TestCreateMCPServer_WithGitReposDisabled(t *testing.T) {
+	settings := &config.Settings{
+		Transport: "stdio",
+		GitRepos: config.GitReposSettings{
+			Enabled: false,
+		},
+	}
+
+	server, cleanup, err := CreateMCPServer(settings)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if server == nil {
+		t.Error("Expected server to be created")
+	}
+	if cleanup != nil {
+		t.Error("Expected no cleanup when git repos disabled")
+		cleanup()
+	}
+}
+
+func TestCreateMCPServer_WithGitReposEnabled(t *testing.T) {
+	dir := t.TempDir()
+
+	settings := &config.Settings{
+		Transport: "stdio",
+		GitRepos: config.GitReposSettings{
+			Enabled:      true,
+			BaseDir:      dir,
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
+	}
+
+	server, cleanup, err := CreateMCPServer(settings)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if server == nil {
+		t.Error("Expected server to be created")
+	}
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+func TestCreateMCPServer_WithGitReposInvalidDir(t *testing.T) {
+	// Use an invalid directory that can't be created
+	settings := &config.Settings{
+		Transport: "stdio",
+		GitRepos: config.GitReposSettings{
+			Enabled:     true,
+			BaseDir:     "/nonexistent/path/that/should/not/exist/relic-test",
+			MaxFileSize: 256 * 1024,
+			MaxResults:  20,
+		},
+	}
+
+	_, _, err := CreateMCPServer(settings)
+	// This should fail because the base directory can't be created
+	if err == nil {
+		t.Error("Expected error for invalid base directory")
 	}
 }
 

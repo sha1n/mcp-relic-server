@@ -8,6 +8,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sha1n/mcp-relic-server/internal/config"
+	"github.com/sha1n/mcp-relic-server/internal/gitrepos"
+	mcputil "github.com/sha1n/mcp-relic-server/internal/mcp"
 	"github.com/spf13/pflag"
 )
 
@@ -74,13 +76,40 @@ func RunWithDeps(ctx context.Context, params RunParams, flags *pflag.FlagSet, ve
 
 // CreateMCPServer creates the MCP server with registered tools
 func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "relic-mcp",
-		Version: "1.0.0",
-	}, nil)
+	var gitReposSvc *gitrepos.Service
+	var cleanup func()
 
-	// No tools registered yet - this is a basic server skeleton
-	// Tools will be added in future implementations
+	// Initialize git repos service if enabled
+	if settings.GitRepos.Enabled {
+		svc, err := gitrepos.NewService(&settings.GitRepos)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create git repos service: %w", err)
+		}
+		gitReposSvc = svc
 
-	return server, nil, nil
+		// Initialize in background context (not tied to request context)
+		if err := svc.Initialize(context.Background()); err != nil {
+			slog.Error("Git repos initialization failed", "error", err)
+			// Close service on initialization failure and continue without it
+			if closeErr := svc.Close(); closeErr != nil {
+				slog.Error("Failed to close git repos service", "error", closeErr)
+			}
+			gitReposSvc = nil
+		} else {
+			// Set up cleanup function
+			cleanup = func() {
+				if err := svc.Close(); err != nil {
+					slog.Error("Failed to close git repos service", "error", err)
+				}
+			}
+		}
+	}
+
+	server := mcputil.CreateServer(mcputil.ServerConfig{
+		Name:        "relic-mcp",
+		Version:     "1.0.0",
+		GitReposSvc: gitReposSvc,
+	})
+
+	return server, cleanup, nil
 }
