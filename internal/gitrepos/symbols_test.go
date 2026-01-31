@@ -3,8 +3,13 @@ package gitrepos
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
+
+func makeLongSymbol() string {
+	return strings.Repeat("A", 101)
+}
 
 func TestExtractSymbols(t *testing.T) {
 	tests := []struct {
@@ -98,9 +103,10 @@ void helper_func(int x) { }
 			ext:  "cpp",
 			content: `class MyClass {};
 struct MyStruct {};
+enum MyEnum {};
 int MyFunc() { return 0; }
 `,
-			expected: []string{"MyClass", "MyStruct", "MyFunc"},
+			expected: []string{"MyClass", "MyStruct", "MyEnum", "MyFunc"},
 		},
 		{
 			name:     "Unsupported extension",
@@ -115,12 +121,42 @@ int MyFunc() { return 0; }
 			expected: nil,
 		},
 		{
-			name: "No matches",
-			ext:  "go",
+			name:     "No matches",
+			ext:      "go",
 			content: `package main
 // Just comments
 // No symbols here
 `,
+			expected: nil,
+		},
+		{
+			name: "JSX alias",
+			ext:  "jsx",
+			content: `const MyComponent = () => {}`,
+			expected: []string{"MyComponent"},
+		},
+		{
+			name: "Golang alias",
+			ext:  "golang",
+			content: `func MyFunc() {}`,
+			expected: []string{"MyFunc"},
+		},
+		{
+			name: "C++ aliases",
+			ext:  "cxx",
+			content: `class MyClass {};`,
+			expected: []string{"MyClass"},
+		},
+		{
+			name: "Header alias",
+			ext:  "h",
+			content: `#define CONSTANT 1`,
+			expected: []string{"CONSTANT"},
+		},
+		{
+			name: "Symbol too long",
+			ext:  "go",
+			content: "func " + makeLongSymbol() + "() {}",
 			expected: nil,
 		},
 	}
