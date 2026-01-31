@@ -438,6 +438,45 @@ func TestSearchTool_SearchNoResults(t *testing.T) {
 	}
 }
 
+func TestSearchTool_SymbolBoosting(t *testing.T) {
+	dir := t.TempDir()
+	// Two files: one defines the symbol, another just mentions it in a comment
+	files := map[string]string{
+		"definition.go": "package main\n\nfunc MySpecialFunction() {\n\t// implementation\n}",
+		"usage.go":      "package main\n\n// TODO: call MySpecialFunction here\nfunc other() {}",
+	}
+
+	svc := setupTestService(t, dir, files)
+	defer closeService(t, svc)
+
+	handler := gitrepos.NewSearchHandler(svc)
+	ctx := context.Background()
+
+	result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+		Query: "MySpecialFunction",
+	})
+	if err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	content := extractTextContent(result)
+
+	// We expect definition.go to be the FIRST result (highest score)
+	// The format is "### 1. <repo>:<path>"
+	lines := strings.Split(content, "\n")
+	firstResultLine := ""
+	for _, line := range lines {
+		if strings.HasPrefix(line, "### 1.") {
+			firstResultLine = line
+			break
+		}
+	}
+
+	if !strings.Contains(firstResultLine, "definition.go") {
+		t.Errorf("Expected definition.go to be the first result due to boosting, but got: %s", firstResultLine)
+	}
+}
+
 func TestSearchTool_SearchWhenNotReady(t *testing.T) {
 	dir := t.TempDir()
 

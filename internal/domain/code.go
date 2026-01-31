@@ -21,6 +21,9 @@ type CodeDocument struct {
 
 	// Content is the full file content used for indexing and search snippets.
 	Content string `json:"content"`
+
+	// Symbols is a list of extracted code symbols (functions, classes, etc.) for boosting search results.
+	Symbols []string `json:"symbols"`
 }
 
 // Bleve field name constants for consistent field references in queries and mappings.
@@ -30,4 +33,5 @@ const (
 	CodeFieldFilePath   = "file_path"
 	CodeFieldExtension  = "extension"
 	CodeFieldContent    = "content"
+	CodeFieldSymbols    = "symbols"
 )

@@ -251,6 +251,42 @@ func TestIndexer_FullIndex(t *testing.T) {
 	}
 }
 
+func TestIndexer_FullIndex_IncludesSymbols(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create test files with symbols
+	createTestFile(t, repoDir, "main.go", "package main\nfunc MySpecialFunction() {}")
+
+	// Run full index
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// Verify search works against symbols field specifically
+	index, err := indexer.OpenForRead("testrepo")
+	if err != nil {
+		t.Fatalf("OpenForRead failed: %v", err)
+	}
+	defer closeIndex(t, index)
+
+	// Create a query specifically for symbols field
+	query := bleve.NewMatchQuery("MySpecialFunction")
+	query.SetField(domain.CodeFieldSymbols)
+	searchReq := bleve.NewSearchRequest(query)
+	results, err := index.Search(searchReq)
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if results.Total == 0 {
+		t.Error("Expected search results for 'MySpecialFunction' in symbols field")
+	}
+}
+
 func TestIndexer_FullIndex_SkipsExcluded(t *testing.T) {
 	dir := t.TempDir()
 	repoDir := filepath.Join(dir, "repos", "testrepo")
