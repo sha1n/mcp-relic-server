@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sha1n/mcp-relic-server/internal/config"
 )
 
@@ -197,9 +198,41 @@ func TestService_Close(t *testing.T) {
 
 	// Close again should be safe
 	if err := svc.Close(); err != nil {
-		t.Errorf("Second Close failed: %v", err)
+		t.Errorf("Second Close returned error: %v", err)
 	}
 }
+
+func TestService_SetGitClient(t *testing.T) {
+	svc := &Service{}
+	client := NewGitClient()
+	svc.SetGitClient(client)
+	if svc.git != client {
+		t.Error("SetGitClient did not set the client")
+	}
+}
+
+func TestRegisterTools(t *testing.T) {
+	// Minimal mock server to verify registration doesn't panic
+	// We can't easily inspect the server's tools without using the MCP SDK internals or integration test.
+	// But simply calling them ensures coverage of the function body.
+
+	// Since mcp.Server is a struct, we can just instantiate it.
+	// But mcp.NewServer requires parameters.
+
+	// Using a real mcp.Server for this test introduces a dependency on mcp package which is fine.
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0"}, nil)
+
+	dir := t.TempDir()
+	settings := &config.GitReposSettings{BaseDir: dir}
+	svc, _ := NewService(settings)
+
+	RegisterSearchTool(server, svc)
+	RegisterReadTool(server, svc)
+}
+
+// ========================================
+// Index Tests
+// ========================================
 
 func TestService_SyncAll_NoURLs(t *testing.T) {
 	dir := t.TempDir()

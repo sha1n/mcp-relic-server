@@ -76,6 +76,12 @@ func CreateIndexMapping() mapping.IndexMapping {
 	pathField.Store = true
 	docMapping.AddFieldMappingsAt(domain.CodeFieldFilePath, pathField)
 
+	// Symbols - analyzed for full-text search, not stored
+	symbolsField := bleve.NewTextFieldMapping()
+	symbolsField.Analyzer = standard.Name
+	symbolsField.Store = false
+	docMapping.AddFieldMappingsAt(domain.CodeFieldSymbols, symbolsField)
+
 	// ID - stored but not indexed (we use the document ID)
 	idField := bleve.NewTextFieldMapping()
 	idField.Index = false
@@ -223,6 +229,7 @@ func (i *Indexer) FullIndex(repoID, repoDir string) (count int, err error) {
 			FilePath:   relPath,
 			Extension:  GetFileExtension(relPath),
 			Content:    string(content),
+			Symbols:    ExtractSymbols(GetFileExtension(relPath), string(content)),
 		}
 
 		// Add to batch
@@ -328,6 +335,7 @@ func (i *Indexer) IncrementalIndex(repoID, repoDir string, changedFiles []string
 			FilePath:   relPath,
 			Extension:  GetFileExtension(relPath),
 			Content:    string(content),
+			Symbols:    ExtractSymbols(GetFileExtension(relPath), string(content)),
 		}
 
 		if err := batch.Index(doc.ID, doc); err != nil {

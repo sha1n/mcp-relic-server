@@ -455,8 +455,13 @@ func TestMatchPattern(t *testing.T) {
 		{"no match", "package-lock.json", "package.json", false},
 
 		// Edge cases
-		{"empty pattern", "", "", true},
-		{"pattern no match", "*.go", "file.py", false},
+		{"empty_pattern", "", "file.txt", false},
+		{"pattern_no_match", "*.txt", "file.go", false},
+		// New cases for coverage
+		{"complex_glob", "test_?.go", "test_1.go", true},
+		{"complex_glob_fail", "test_?.go", "test_10.go", false},
+		{"bad_pattern", "[", "file.go", false},
+		{"bad_pattern_simple", "a[", "file.go", false},
 	}
 
 	for _, tt := range tests {

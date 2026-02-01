@@ -90,17 +90,25 @@ func (h *SearchHandler) Handle(ctx context.Context, req *mcp.CallToolRequest, ar
 
 // buildQuery constructs a Bleve query from search arguments.
 func (h *SearchHandler) buildQuery(args SearchArgument) query.Query {
-	// Content query (main search query)
+	// Content query
 	contentQuery := bleve.NewMatchQuery(args.Query)
 	contentQuery.SetField(domain.CodeFieldContent)
 
-	// If no filters, return content query directly
+	// Symbols query with boost
+	symbolsQuery := bleve.NewMatchQuery(args.Query)
+	symbolsQuery.SetField(domain.CodeFieldSymbols)
+	symbolsQuery.SetBoost(5.0)
+
+	// Combined search query (Disjunction - OR)
+	searchQuery := bleve.NewDisjunctionQuery(contentQuery, symbolsQuery)
+
+	// If no filters, return search query directly
 	if args.Repository == "" && args.Extension == "" {
-		return contentQuery
+		return searchQuery
 	}
 
 	// Build conjunction query with filters
-	must := []query.Query{contentQuery}
+	must := []query.Query{searchQuery}
 
 	if args.Repository != "" {
 		// Repository is stored in display format (github.com/org/repo)

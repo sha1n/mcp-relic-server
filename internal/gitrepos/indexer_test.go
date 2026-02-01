@@ -251,6 +251,42 @@ func TestIndexer_FullIndex(t *testing.T) {
 	}
 }
 
+func TestIndexer_FullIndex_IncludesSymbols(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create test files with symbols
+	createTestFile(t, repoDir, "main.go", "package main\nfunc MySpecialFunction() {}")
+
+	// Run full index
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// Verify search works against symbols field specifically
+	index, err := indexer.OpenForRead("testrepo")
+	if err != nil {
+		t.Fatalf("OpenForRead failed: %v", err)
+	}
+	defer closeIndex(t, index)
+
+	// Create a query specifically for symbols field
+	query := bleve.NewMatchQuery("MySpecialFunction")
+	query.SetField(domain.CodeFieldSymbols)
+	searchReq := bleve.NewSearchRequest(query)
+	results, err := index.Search(searchReq)
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if results.Total == 0 {
+		t.Error("Expected search results for 'MySpecialFunction' in symbols field")
+	}
+}
+
 func TestIndexer_FullIndex_SkipsExcluded(t *testing.T) {
 	dir := t.TempDir()
 	repoDir := filepath.Join(dir, "repos", "testrepo")
@@ -332,6 +368,55 @@ func TestIndexer_FullIndex_SkipsGitDir(t *testing.T) {
 
 	if count != 1 {
 		t.Errorf("Expected 1 file indexed (main.go only), got %d", count)
+	}
+}
+
+func TestIndexer_FullIndex_ReadError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Skipping permission test as root")
+	}
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	createTestFile(t, repoDir, "unreadable.go", "secret")
+	path := filepath.Join(repoDir, "unreadable.go")
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatalf("Failed to chmod: %v", err)
+	}
+
+	// FullIndex should assume it's a transient error or just skip it?
+	// Implementation says:
+	// content, err := os.ReadFile(path)
+	// if err != nil { return nil } -> returns nil error to WalkDir, so it skips the file.
+
+	count, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed, got %d", count)
+	}
+}
+
+func TestIndexer_OpenForWrite_Error(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Skipping permission test as root")
+	}
+	dir := t.TempDir()
+	// Make dir read-only so creating "indexes" subdir fails
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatalf("Failed to chmod: %v", err)
+	}
+
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	_, err := indexer.OpenForWrite("testrepo")
+	if err == nil {
+		t.Error("Expected error when opening index in read-only dir")
 	}
 }
 

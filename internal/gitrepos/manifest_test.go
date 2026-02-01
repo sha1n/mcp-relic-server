@@ -215,6 +215,28 @@ func TestManifest_Save_AtomicWrite(t *testing.T) {
 	}
 }
 
+func TestManifest_Save_Error(t *testing.T) {
+	// Create a directory where we can't write
+	dir := t.TempDir()
+	readOnlyDir := filepath.Join(dir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0555); err != nil {
+		t.Fatalf("Failed to create read-only dir: %v", err)
+	}
+
+	manifest := NewManifest()
+	// Try to save to readonly/state/manifest.json
+	manifestPath := filepath.Join(readOnlyDir, "state", "manifest.json")
+
+	err := manifest.Save(manifestPath)
+	if err == nil {
+		// If running as root (e.g. in some docker containers), permissions might be ignored.
+		// But in standard environment this should fail.
+		if os.Getuid() != 0 {
+			t.Error("Expected error when saving to read-only directory")
+		}
+	}
+}
+
 func TestManifest_GetRepoState_Existing(t *testing.T) {
 	m := NewManifest()
 	m.Repos["repo1"] = RepoState{URL: "url1", FileCount: 10}
