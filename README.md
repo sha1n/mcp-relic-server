@@ -33,6 +33,22 @@ docker build -t relic-mcp .
 docker run -p 8080:8080 relic-mcp --transport sse
 ```
 
+### Docker Compose
+
+A `docker-compose.yml` file is included for easy deployment.
+
+1. Create a `data` directory for persistent storage:
+   ```bash
+   mkdir data
+   ```
+
+2. Edit `docker-compose.yml` to configure your repositories (or set via environment variables).
+
+3. Run the server:
+   ```bash
+   docker-compose up -d
+   ```
+
 ## Quick Start
 
 ### 1. Configure Git Repositories
