@@ -215,21 +215,17 @@ func TestRegisterTools(t *testing.T) {
 	// Minimal mock server to verify registration doesn't panic
 	// We can't easily inspect the server's tools without using the MCP SDK internals or integration test.
 	// But simply calling them ensures coverage of the function body.
-	
+
 	// Since mcp.Server is a struct, we can just instantiate it.
 	// But mcp.NewServer requires parameters.
-	
+
 	// Using a real mcp.Server for this test introduces a dependency on mcp package which is fine.
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0"}, nil)
-	svc := &Service{} // Nil service might panic inside Register if it uses it immediately? 
-	// The Register functions passed the service to the handler constructor. 
-	// Handler methods check for nil service? No, NewSearchHandler takes *Service.
-	// We should pass a valid service.
-	
+
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{BaseDir: dir}
-	svc, _ = NewService(settings)
-	
+	svc, _ := NewService(settings)
+
 	RegisterSearchTool(server, svc)
 	RegisterReadTool(server, svc)
 }

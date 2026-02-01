@@ -390,7 +390,7 @@ func TestIndexer_FullIndex_ReadError(t *testing.T) {
 	// Implementation says:
 	// content, err := os.ReadFile(path)
 	// if err != nil { return nil } -> returns nil error to WalkDir, so it skips the file.
-	
+
 	count, err := indexer.FullIndex("testrepo", repoDir)
 	if err != nil {
 		t.Fatalf("FullIndex failed: %v", err)
