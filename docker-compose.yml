@@ -1,0 +1,20 @@
+services:
+  relic-mcp:
+    build: .
+    image: sha1n/mcp-relic-server:latest
+    container_name: relic-mcp
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/home/relic/.relic-mcp
+    environment:
+      - RELIC_MCP_HOST=0.0.0.0
+      - RELIC_MCP_PORT=8080
+      - RELIC_MCP_GIT_REPOS_ENABLED=true
+      # Add your repositories here, comma separated
+      - RELIC_MCP_GIT_REPOS_URLS=https://github.com/sha1n/mcp-relic-server.git
+      - RELIC_MCP_GIT_REPOS_SYNC_INTERVAL=15m
+      # Optional Authentication
+      # - RELIC_MCP_AUTH_TYPE=apikey
+      # - RELIC_MCP_AUTH_API_KEYS=your-secret-key
