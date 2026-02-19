@@ -5,11 +5,17 @@ import (
 	"github.com/sha1n/mcp-relic-server/internal/gitrepos"
 )
 
+// GitReposToolService combines what both search and read tools need.
+type GitReposToolService interface {
+	gitrepos.SearchService
+	gitrepos.ReadService
+}
+
 // ServerConfig contains configuration for creating an MCP server
 type ServerConfig struct {
 	Name        string
 	Version     string
-	GitReposSvc *gitrepos.Service // Optional, nil if disabled
+	GitReposSvc GitReposToolService // Optional, nil if disabled
 }
 
 // CreateServer creates and configures the MCP server

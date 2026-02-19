@@ -1,12 +1,29 @@
 package mcp
 
 import (
-	"os"
+	"fmt"
 	"testing"
 
-	"github.com/sha1n/mcp-relic-server/internal/config"
-	"github.com/sha1n/mcp-relic-server/internal/gitrepos"
+	"github.com/blevesearch/bleve/v2"
 )
+
+// mockGitReposToolService implements GitReposToolService for testing.
+type mockGitReposToolService struct {
+	ready       bool
+	alias       bleve.IndexAlias
+	aliasErr    error
+	maxResults  int
+	repoDir     string
+	maxFileSize int64
+}
+
+func (m *mockGitReposToolService) IsReady() bool { return m.ready }
+func (m *mockGitReposToolService) GetIndexAlias() (bleve.IndexAlias, error) {
+	return m.alias, m.aliasErr
+}
+func (m *mockGitReposToolService) MaxResults() int            { return m.maxResults }
+func (m *mockGitReposToolService) GetRepoDir(_ string) string { return m.repoDir }
+func (m *mockGitReposToolService) MaxFileSize() int64         { return m.maxFileSize }
 
 func TestCreateServer(t *testing.T) {
 	cfg := ServerConfig{
@@ -55,31 +72,15 @@ func TestCreateServer_WithoutGitReposService(t *testing.T) {
 }
 
 func TestCreateServer_WithGitReposService(t *testing.T) {
-	// Create a temporary directory for the test
-	dir := t.TempDir()
-
-	// Create a minimal git repos service
-	settings := &config.GitReposSettings{
-		Enabled:     true,
-		BaseDir:     dir,
-		MaxFileSize: 256 * 1024,
-		MaxResults:  20,
-	}
-
-	svc, err := gitrepos.NewService(settings)
-	if err != nil {
-		t.Fatalf("Failed to create git repos service: %v", err)
-	}
-	defer func() {
-		if err := svc.Close(); err != nil {
-			t.Errorf("Failed to close service: %v", err)
-		}
-	}()
-
 	cfg := ServerConfig{
-		Name:        "test-server",
-		Version:     "1.0.0",
-		GitReposSvc: svc,
+		Name:    "test-server",
+		Version: "1.0.0",
+		GitReposSvc: &mockGitReposToolService{
+			ready:       false,
+			maxResults:  20,
+			maxFileSize: 256 * 1024,
+			aliasErr:    fmt.Errorf("not ready"),
+		},
 	}
 
 	server := CreateServer(cfg)
@@ -89,48 +90,18 @@ func TestCreateServer_WithGitReposService(t *testing.T) {
 }
 
 func TestCreateServer_ToolsRegistered(t *testing.T) {
-	// Create a temporary directory for the test
-	dir := t.TempDir()
-
-	// Create repos and indexes directories
-	if err := os.MkdirAll(dir+"/repos", 0755); err != nil {
-		t.Fatalf("Failed to create repos dir: %v", err)
-	}
-	if err := os.MkdirAll(dir+"/indexes", 0755); err != nil {
-		t.Fatalf("Failed to create indexes dir: %v", err)
-	}
-
-	// Create a git repos service
-	settings := &config.GitReposSettings{
-		Enabled:     true,
-		BaseDir:     dir,
-		MaxFileSize: 256 * 1024,
-		MaxResults:  20,
-	}
-
-	svc, err := gitrepos.NewService(settings)
-	if err != nil {
-		t.Fatalf("Failed to create git repos service: %v", err)
-	}
-	defer func() {
-		if err := svc.Close(); err != nil {
-			t.Errorf("Failed to close service: %v", err)
-		}
-	}()
-
 	cfg := ServerConfig{
-		Name:        "test-server",
-		Version:     "1.0.0",
-		GitReposSvc: svc,
+		Name:    "test-server",
+		Version: "1.0.0",
+		GitReposSvc: &mockGitReposToolService{
+			ready:       true,
+			maxResults:  20,
+			maxFileSize: 256 * 1024,
+		},
 	}
 
 	server := CreateServer(cfg)
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
-
-	// The server is created with tools registered.
-	// The MCP SDK doesn't expose a way to list registered tools,
-	// so we just verify the server was created successfully.
-	// Integration tests will verify tools are accessible via MCP protocol.
 }

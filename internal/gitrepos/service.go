@@ -24,14 +24,21 @@ const (
 // Service coordinates git operations, indexing, and search.
 type Service struct {
 	settings *config.GitReposSettings
-	git      *GitClient
-	indexer  *Indexer
-	filter   *FileFilter
-	manifest *Manifest
-	lock     *FileLock
+	git      GitOperations
+	indexer  IndexOperations
+	manifest ManifestOperations
+	lock     SyncLock
 	alias    bleve.IndexAlias
 	ready    bool
 	mu       sync.RWMutex
+}
+
+// ServiceDeps holds injectable dependencies for creating a Service.
+type ServiceDeps struct {
+	Git      GitOperations
+	Indexer  IndexOperations
+	Manifest ManifestOperations
+	Lock     SyncLock
 }
 
 // NewService creates a new git repos service.
@@ -74,50 +81,62 @@ func NewService(settings *config.GitReposSettings) (*Service, error) {
 		settings: settings,
 		git:      git,
 		indexer:  indexer,
-		filter:   filter,
 		manifest: manifest,
 		lock:     lock,
 	}, nil
 }
 
+// NewServiceWithDeps creates a Service with injected dependencies for testing.
+func NewServiceWithDeps(settings *config.GitReposSettings, deps ServiceDeps) *Service {
+	return &Service{
+		settings: settings,
+		git:      deps.Git,
+		indexer:  deps.Indexer,
+		manifest: deps.Manifest,
+		lock:     deps.Lock,
+	}
+}
+
 // Initialize prepares the service with leader/follower sync logic.
 func (s *Service) Initialize(ctx context.Context) error {
-	// Try to become sync leader
 	acquired, err := s.lock.TryLock()
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
 	if acquired {
-		// Leader: sync repos
-		slog.Info("Acquired sync leader lock, starting sync")
-		if err := s.SyncAll(ctx); err != nil {
-			slog.Error("Sync failed", "error", err)
-			// Continue to open indexes anyway
-		}
-		// Save manifest after sync
-		if err := s.saveManifest(); err != nil {
-			slog.Error("Failed to save manifest", "error", err)
-		}
-		// Unlock after sync completes
+		s.initializeAsLeader(ctx)
+	} else {
+		s.initializeAsFollower()
+	}
+
+	return s.openIndexes()
+}
+
+// initializeAsLeader syncs repos, saves manifest, and unlocks.
+func (s *Service) initializeAsLeader(ctx context.Context) {
+	slog.Info("Acquired sync leader lock, starting sync")
+	if err := s.SyncAll(ctx); err != nil {
+		slog.Error("Sync failed", "error", err)
+	}
+	if err := s.saveManifest(); err != nil {
+		slog.Error("Failed to save manifest", "error", err)
+	}
+	if err := s.lock.Unlock(); err != nil {
+		slog.Error("Failed to unlock", "error", err)
+	}
+}
+
+// initializeAsFollower waits for the leader to finish, then opens indexes.
+func (s *Service) initializeAsFollower() {
+	slog.Info("Another instance is syncing, waiting for completion")
+	if err := s.lock.Lock(s.settings.SyncTimeout); err != nil {
+		slog.Warn("Timeout waiting for sync, using existing indexes", "error", err)
+	} else {
 		if err := s.lock.Unlock(); err != nil {
 			slog.Error("Failed to unlock", "error", err)
 		}
-	} else {
-		// Follower: wait for sync to complete
-		slog.Info("Another instance is syncing, waiting for completion")
-		if err := s.lock.Lock(s.settings.SyncTimeout); err != nil {
-			slog.Warn("Timeout waiting for sync, using existing indexes", "error", err)
-		} else {
-			// Got the lock, release it immediately
-			if err := s.lock.Unlock(); err != nil {
-				slog.Error("Failed to unlock", "error", err)
-			}
-		}
 	}
-
-	// Open indexes read-only
-	return s.openIndexes()
 }
 
 // SyncAll synchronizes all configured repositories.
@@ -224,7 +243,7 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 			// Try incremental index if we have previous commit
 			if state.LastCommit != "" {
 				changedFiles, err := s.git.GetChangedFiles(ctx, repoDir, state.LastCommit, currentCommit)
-				if err == nil && len(changedFiles) > 0 {
+				if err == nil && len(changedFiles) > 0 && len(changedFiles) <= 100 {
 					slog.Info("Incremental indexing", "repo_id", repoID, "changed_files", len(changedFiles))
 					indexed, err := s.indexer.IncrementalIndex(repoID, repoDir, changedFiles)
 					if err != nil {
@@ -237,6 +256,8 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 						slog.Info("Incremental index complete", "repo_id", repoID, "indexed", indexed)
 						return nil
 					}
+				} else if err == nil && len(changedFiles) > 100 {
+					slog.Info("Too many changed files for incremental index, falling back to full index", "repo_id", repoID, "changed_files", len(changedFiles))
 				}
 			}
 		}
@@ -322,14 +343,24 @@ func (s *Service) GetRepoDir(repoID string) string {
 	return filepath.Join(s.settings.BaseDir, "repos", repoID)
 }
 
+// MaxResults returns the configured maximum number of search results.
+func (s *Service) MaxResults() int {
+	return s.settings.MaxResults
+}
+
+// MaxFileSize returns the configured maximum file size for reading.
+func (s *Service) MaxFileSize() int64 {
+	return s.settings.MaxFileSize
+}
+
 // GetSettings returns the service settings.
 func (s *Service) GetSettings() *config.GitReposSettings {
 	return s.settings
 }
 
-// SetGitClient allows injecting a custom git client for testing.
-func (s *Service) SetGitClient(client *GitClient) {
-	s.git = client
+// SetGitOperations allows injecting a custom GitOperations implementation for testing.
+func (s *Service) SetGitOperations(ops GitOperations) {
+	s.git = ops
 }
 
 // Close releases all resources.

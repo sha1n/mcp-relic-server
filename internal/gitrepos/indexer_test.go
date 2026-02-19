@@ -1,6 +1,7 @@
 package gitrepos
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -585,6 +586,177 @@ func TestIndexer_GetDocumentCount(t *testing.T) {
 
 	if count != 3 {
 		t.Errorf("Expected 3 documents, got %d", count)
+	}
+}
+
+func TestIndexer_FullIndex_BatchFlush(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create >100 files to trigger batch flushing (MaxBatchSize = 100)
+	for i := 0; i < 120; i++ {
+		createTestFile(t, repoDir, filepath.Join("pkg", fmt.Sprintf("file%d.go", i)),
+			fmt.Sprintf("package pkg\nfunc Func%d() {}", i))
+	}
+
+	count, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	if count != 120 {
+		t.Errorf("Expected 120 files indexed, got %d", count)
+	}
+
+	// Verify all documents are searchable
+	docCount, err := indexer.GetDocumentCount("testrepo")
+	if err != nil {
+		t.Fatalf("GetDocumentCount failed: %v", err)
+	}
+	if docCount != 120 {
+		t.Errorf("Expected 120 documents in index, got %d", docCount)
+	}
+}
+
+func TestIndexer_FullIndex_EmptyRepo(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create empty directory
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+
+	count, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed, got %d", count)
+	}
+}
+
+func TestIndexer_IncrementalIndex_ExcludedFile(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create initial file and index
+	createTestFile(t, repoDir, "main.go", "package main")
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// "Changed" file is in node_modules (excluded pattern) - should be deleted from index
+	createTestFile(t, repoDir, "node_modules/pkg/index.js", "module.exports = {}")
+	count, err := indexer.IncrementalIndex("testrepo", repoDir, []string{"node_modules/pkg/index.js"})
+	if err != nil {
+		t.Fatalf("IncrementalIndex failed: %v", err)
+	}
+
+	// Should not count excluded files as indexed
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed (excluded), got %d", count)
+	}
+}
+
+func TestIndexer_IncrementalIndex_OversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(100) // Very small max
+	indexer := NewIndexer(dir, filter, 100)
+
+	// Create initial small file and index
+	createTestFile(t, repoDir, "small.go", "package main")
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// Add oversized file
+	createTestFile(t, repoDir, "large.go", makeLargeContent(200))
+	count, err := indexer.IncrementalIndex("testrepo", repoDir, []string{"large.go"})
+	if err != nil {
+		t.Fatalf("IncrementalIndex failed: %v", err)
+	}
+
+	// Oversized file should not be counted
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed (oversized), got %d", count)
+	}
+}
+
+func TestIndexer_IncrementalIndex_BinaryFile(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create initial file and index
+	createTestFile(t, repoDir, "main.go", "package main")
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// Add binary file
+	createBinaryFile(t, repoDir, "data.bin")
+	count, err := indexer.IncrementalIndex("testrepo", repoDir, []string{"data.bin"})
+	if err != nil {
+		t.Fatalf("IncrementalIndex failed: %v", err)
+	}
+
+	// Binary file should not be counted
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed (binary), got %d", count)
+	}
+}
+
+func TestIndexer_IncrementalIndex_Directory(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repos", "testrepo")
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	// Create initial file and index
+	createTestFile(t, repoDir, "main.go", "package main")
+	_, err := indexer.FullIndex("testrepo", repoDir)
+	if err != nil {
+		t.Fatalf("FullIndex failed: %v", err)
+	}
+
+	// Create a directory that appears in changed files list
+	subDir := filepath.Join(repoDir, "newdir")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create dir: %v", err)
+	}
+
+	count, err := indexer.IncrementalIndex("testrepo", repoDir, []string{"newdir"})
+	if err != nil {
+		t.Fatalf("IncrementalIndex failed: %v", err)
+	}
+
+	// Directory should be skipped
+	if count != 0 {
+		t.Errorf("Expected 0 files indexed (directory), got %d", count)
+	}
+}
+
+func TestIndexer_GetDocumentCount_NonExistent(t *testing.T) {
+	dir := t.TempDir()
+	filter := NewFileFilter(256 * 1024)
+	indexer := NewIndexer(dir, filter, 256*1024)
+
+	_, err := indexer.GetDocumentCount("nonexistent")
+	if err == nil {
+		t.Error("Expected error for non-existent index")
 	}
 }
 

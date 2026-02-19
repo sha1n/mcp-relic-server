@@ -474,6 +474,74 @@ func TestMatchPattern(t *testing.T) {
 	}
 }
 
+func TestMatchPattern_DirectorySuffix(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		matches bool
+	}{
+		// /** suffix - matches directory and all contents
+		{"dir/** matches file in dir", "build/**", "build/output.js", true},
+		{"dir/** matches nested file", "build/**", "build/sub/output.js", true},
+		{"dir/** matches dir name only", "build/**", "build", true},
+		{"dir/** no match for different dir", "build/**", "src/output.js", false},
+		{"dir/** matches dir as component in path", "build/**", "project/build/file.js", true},
+		{"dir/** no match for partial name", "build/**", "rebuilding/file.js", false},
+
+		// Prefix **/ - matches at any directory depth
+		{"**/file matches at root", "**/file.go", "file.go", true},
+		{"**/file matches nested", "**/file.go", "src/file.go", true},
+		{"**/file matches deeply nested", "**/file.go", "a/b/c/file.go", true},
+		{"**/dir/ matches dir pattern", "**/test/*.go", "test/main.go", true},
+		{"**/dir/ matches nested dir", "**/test/*.go", "src/test/main.go", true},
+		{"**/dir/ no match", "**/test/*.go", "prod/main.go", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchPattern(tt.pattern, tt.path)
+			if result != tt.matches {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.path, result, tt.matches)
+			}
+		})
+	}
+}
+
+func TestMatchSimplePattern_Wildcards(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		matches bool
+	}{
+		// * prefix (not *.) - generic suffix match
+		{"star suffix match", "*_test.go", "main_test.go", true},
+		{"star suffix in path", "*_test.go", "pkg/main_test.go", true},
+		{"star suffix no match", "*_test.go", "main.go", false},
+		{"star suffix case insensitive", "*_TEST.GO", "main_test.go", true},
+
+		// filepath.Match patterns
+		{"question mark wildcard", "?.go", "a.go", true},
+		{"question mark no match", "?.go", "ab.go", false},
+		{"bracket range", "[abc].go", "a.go", true},
+		{"bracket range no match", "[abc].go", "d.go", false},
+
+		// Match against filename component
+		{"pattern matches basename", "main.go", "src/main.go", true},
+		{"pattern matches basename nested", "main.go", "src/pkg/main.go", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchSimplePattern(tt.pattern, tt.path)
+			if result != tt.matches {
+				t.Errorf("matchSimplePattern(%q, %q) = %v, want %v", tt.pattern, tt.path, result, tt.matches)
+			}
+		})
+	}
+}
+
 func TestDefaultExcludePatterns(t *testing.T) {
 	// Verify default patterns are non-empty
 	if len(DefaultExcludePatterns) == 0 {

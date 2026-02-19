@@ -268,6 +268,62 @@ func TestCreateMCPServer_WithGitReposInvalidDir(t *testing.T) {
 	}
 }
 
+func TestCreateMCPServer_WithGitReposInitFailure(t *testing.T) {
+	dir := t.TempDir()
+
+	settings := &config.Settings{
+		Transport: "stdio",
+		GitRepos: config.GitReposSettings{
+			Enabled: true,
+			// Use valid base dir but no URLs - Initialize will succeed
+			// but result in no indexes, which means service won't be ready
+			// To test the actual failure path, we need a scenario where
+			// Initialize returns an error. We can trigger this by creating
+			// a lock that's already held.
+			URLs:        []string{"git@github.com:test/repo.git"},
+			BaseDir:     dir,
+			SyncTimeout: 1 * time.Second,
+			MaxFileSize: 256 * 1024,
+			MaxResults:  20,
+		},
+	}
+
+	// CreateMCPServer should succeed even when git repos init has issues
+	// (it logs errors but continues)
+	server, cleanup, err := CreateMCPServer(settings)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if server == nil {
+		t.Error("Expected server to be created even when git repos have issues")
+	}
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+func TestRunWithDeps_SSEWithNilCleanup(t *testing.T) {
+	params := RunParams{
+		LoadSettings: func(*pflag.FlagSet) (*config.Settings, error) {
+			return &config.Settings{Transport: "sse"}, nil
+		},
+		ValidSettings: noopValidate,
+		CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+			// Return nil cleanup (no git repos)
+			return nil, nil, nil
+		},
+		StartSSEServer: func(*mcp.Server, *config.Settings) error {
+			return errors.New("intentional error")
+		},
+	}
+
+	err := RunWithDeps(context.Background(), params, nil, "test")
+	if err == nil {
+		t.Error("Expected error")
+	}
+	// This tests the nil cleanup guard (line 59-61 in runner.go)
+}
+
 // mockTransport implements mcp.Transport for testing
 type mockTransport struct {
 	connectCalled *bool

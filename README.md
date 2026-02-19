@@ -237,9 +237,9 @@ For any MCP-compatible client, use:
 
 When git repository indexing is enabled, the following tools are available:
 
-### `search_code`
+### `search`
 
-Search for code across indexed repositories.
+Search across indexed git repositories for code, documentation, and configuration.
 
 **Arguments:**
 | Name | Type | Required | Description |
@@ -257,9 +257,9 @@ Search for code across indexed repositories.
 }
 ```
 
-### `read_code`
+### `read`
 
-Read the full content of a file from an indexed repository.
+Read the full content of a file from an indexed git repository.
 
 **Arguments:**
 | Name | Type | Required | Description |
@@ -361,7 +361,7 @@ Binary files are also detected by content (null bytes in first 512 bytes).
 - **Path traversal prevention**: All file paths are validated and sanitized
 - **Repository isolation**: Only configured repositories are accessible
 - **File size limits**: Large files are rejected to prevent memory exhaustion
-- **Binary detection**: Binary files cannot be read via the `read_code` tool
+- **Binary detection**: Binary files cannot be read via the `read` tool
 
 ---
 

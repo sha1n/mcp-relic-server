@@ -135,11 +135,11 @@ func TestServiceLifecycle_ConcurrentInitialization(t *testing.T) {
 				}
 			}()
 
-			// Create mock executor
+			// Create mock executor and inject via git field
 			mock := gitrepos.NewMockExecutor()
 			mock.AddResponse("git clone", []byte{}, nil)
 			mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
-			svc.SetGitClient(gitrepos.NewGitClientWithExecutor(mock))
+			setMockGit(svc, mock)
 
 			// Create repo directory with a test file
 			repoDir := filepath.Join(dir, "repos", "github.com_test_repo")
@@ -255,7 +255,7 @@ func TestIndex_MultipleReposCreateCombinedAlias(t *testing.T) {
 	mock.AddResponse("git clone", []byte{}, nil)
 	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
 	mock.AddResponse("git rev-parse", []byte("def456\n"), nil)
-	svc.SetGitClient(gitrepos.NewGitClientWithExecutor(mock))
+	setMockGit(svc, mock)
 
 	// Create files in both repos
 	for _, repoName := range []string{"github.com_test_repo1", "github.com_test_repo2"} {
@@ -318,10 +318,10 @@ func TestSearchTool_SearchReturnsResults(t *testing.T) {
 	}
 
 	if result.IsError {
-		t.Errorf("Expected success, got error: %s", extractTextContent(result))
+		t.Errorf("Expected success, got error: %s", gitrepos.ExtractTextContent(result))
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "Found") || !strings.Contains(content, "result") {
 		t.Errorf("Expected search results, got: %s", content)
 	}
@@ -362,7 +362,7 @@ func TestSearchTool_SearchWithRepositoryFilter(t *testing.T) {
 	}
 
 	// Should return no results but not an error
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "No results") {
 		t.Errorf("Expected no results for non-matching repo, got: %s", content)
 	}
@@ -432,7 +432,7 @@ func TestSearchTool_SearchNoResults(t *testing.T) {
 		t.Errorf("Expected no error for zero results search")
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "No results") {
 		t.Errorf("Expected 'No results' message, got: %s", content)
 	}
@@ -459,14 +459,14 @@ func TestSearchTool_SymbolBoosting(t *testing.T) {
 		t.Fatalf("Handle returned error: %v", err)
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 
 	// We expect definition.go to be the FIRST result (highest score)
-	// The format is "### 1. <repo>:<path>"
+	// The format is "**1. <repo>** `<path>`"
 	lines := strings.Split(content, "\n")
 	firstResultLine := ""
 	for _, line := range lines {
-		if strings.HasPrefix(line, "### 1.") {
+		if strings.HasPrefix(line, "**1.") {
 			firstResultLine = line
 			break
 		}
@@ -509,7 +509,7 @@ func TestSearchTool_SearchWhenNotReady(t *testing.T) {
 		t.Error("Expected error when service not ready")
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "not available") && !strings.Contains(content, "still being indexed") {
 		t.Errorf("Expected appropriate not ready message, got: %s", content)
 	}
@@ -541,10 +541,10 @@ func TestReadTool_ReadFileReturnsContent(t *testing.T) {
 	}
 
 	if result.IsError {
-		t.Errorf("Expected success, got error: %s", extractTextContent(result))
+		t.Errorf("Expected success, got error: %s", gitrepos.ExtractTextContent(result))
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "package main") {
 		t.Errorf("Expected file content, got: %s", content)
 	}
@@ -574,7 +574,7 @@ func TestReadTool_ReadWithInvalidRepoReturnsError(t *testing.T) {
 		t.Error("Expected error for invalid repository")
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "not found") {
 		t.Errorf("Expected 'not found' message, got: %s", content)
 	}
@@ -604,7 +604,7 @@ func TestReadTool_ReadWithInvalidPathReturnsError(t *testing.T) {
 		t.Error("Expected error for invalid path")
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "not found") {
 		t.Errorf("Expected 'not found' message, got: %s", content)
 	}
@@ -675,7 +675,7 @@ func TestReadTool_ReadBinaryFileReturnsError(t *testing.T) {
 		t.Error("Expected error for binary file")
 	}
 
-	content := extractTextContent(result)
+	content := gitrepos.ExtractTextContent(result)
 	if !strings.Contains(content, "binary") {
 		t.Errorf("Expected 'binary' message, got: %s", content)
 	}
@@ -704,10 +704,6 @@ func TestMCPServer_ToolsRegistered(t *testing.T) {
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
-
-	// The MCP SDK doesn't expose a way to list registered tools directly,
-	// but we can verify the server was created successfully and the tools
-	// work by invoking them through handlers (tested above).
 }
 
 func TestMCPServer_NoToolsWhenServiceNil(t *testing.T) {
@@ -721,8 +717,6 @@ func TestMCPServer_NoToolsWhenServiceNil(t *testing.T) {
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
-
-	// Server should be created successfully without tools
 }
 
 // ========================================
@@ -752,7 +746,7 @@ func setupTestService(t *testing.T, baseDir string, files map[string]string) *gi
 	mock := gitrepos.NewMockExecutor()
 	mock.AddResponse("git clone", []byte{}, nil)
 	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
-	svc.SetGitClient(gitrepos.NewGitClientWithExecutor(mock))
+	setMockGit(svc, mock)
 
 	// Create repo directory with test files
 	repoDir := filepath.Join(baseDir, "repos", "github.com_test_repo")
@@ -788,13 +782,7 @@ func closeService(t *testing.T, svc *gitrepos.Service) {
 	}
 }
 
-// extractTextContent extracts text from MCP result
-func extractTextContent(result *mcp.CallToolResult) string {
-	var sb strings.Builder
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			sb.WriteString(tc.Text)
-		}
-	}
-	return sb.String()
+// setMockGit injects a mock git client into the service for testing.
+func setMockGit(svc *gitrepos.Service, mock *gitrepos.MockExecutor) {
+	svc.SetGitOperations(gitrepos.NewGitClientWithExecutor(mock))
 }

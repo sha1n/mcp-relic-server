@@ -76,7 +76,7 @@ func RunWithDeps(ctx context.Context, params RunParams, flags *pflag.FlagSet, ve
 
 // CreateMCPServer creates the MCP server with registered tools
 func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
-	var gitReposSvc *gitrepos.Service
+	var gitReposSvc mcputil.GitReposToolService
 	var cleanup func()
 
 	// Initialize git repos service if enabled
@@ -85,7 +85,6 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create git repos service: %w", err)
 		}
-		gitReposSvc = svc
 
 		// Initialize in background context (not tied to request context)
 		if err := svc.Initialize(context.Background()); err != nil {
@@ -94,8 +93,8 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 			if closeErr := svc.Close(); closeErr != nil {
 				slog.Error("Failed to close git repos service", "error", closeErr)
 			}
-			gitReposSvc = nil
 		} else {
+			gitReposSvc = svc
 			// Set up cleanup function
 			cleanup = func() {
 				if err := svc.Close(); err != nil {

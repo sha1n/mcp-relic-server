@@ -18,11 +18,11 @@ type ReadArgument struct {
 
 // ReadHandler handles the read MCP tool.
 type ReadHandler struct {
-	service *Service
+	service ReadService
 }
 
 // NewReadHandler creates a new read handler.
-func NewReadHandler(service *Service) *ReadHandler {
+func NewReadHandler(service ReadService) *ReadHandler {
 	return &ReadHandler{
 		service: service,
 	}
@@ -127,7 +127,7 @@ func (h *ReadHandler) Handle(ctx context.Context, req *mcp.CallToolRequest, args
 	}
 
 	// Check file size
-	maxFileSize := h.service.GetSettings().MaxFileSize
+	maxFileSize := h.service.MaxFileSize()
 	if info.Size() > maxFileSize {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -161,10 +161,13 @@ func (h *ReadHandler) Handle(ctx context.Context, req *mcp.CallToolRequest, args
 	// Format result with language hint
 	lang := extensionToLanguage(GetFileExtension(args.Path))
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("**File**: `%s`\n", args.Path))
-	sb.WriteString(fmt.Sprintf("**Repository**: %s\n", args.Repository))
-	sb.WriteString(fmt.Sprintf("**Size**: %d bytes\n\n", len(content)))
-	sb.WriteString(fmt.Sprintf("```%s\n%s\n```", lang, string(content)))
+	sb.WriteString(fmt.Sprintf("**%s** `%s`\n\n", args.Repository, args.Path))
+	sb.WriteString(fmt.Sprintf("```%s\n", lang))
+	sb.WriteString(string(content))
+	if !strings.HasSuffix(string(content), "\n") {
+		sb.WriteString("\n")
+	}
+	sb.WriteString("```\n")
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -248,13 +251,19 @@ func extensionToLanguage(ext string) string {
 // GetToolDefinition returns the MCP tool definition.
 func (h *ReadHandler) GetToolDefinition() *mcp.Tool {
 	return &mcp.Tool{
-		Name:        "read_code",
-		Description: "Read a file from an indexed git repository",
+		Name: "read",
+		Description: `Read the full content of a file from an indexed git repository.
+
+WHEN TO USE: Use after search to retrieve the complete file content,
+or when you know the exact repository and file path you need to read.
+
+HOW IT WORKS: Provide the repository name and file path. Returns the full
+file content with syntax highlighting hints based on file extension.`,
 	}
 }
 
 // RegisterReadTool registers the read tool with an MCP server.
-func RegisterReadTool(server *mcp.Server, service *Service) {
+func RegisterReadTool(server *mcp.Server, service ReadService) {
 	handler := NewReadHandler(service)
 	mcp.AddTool(server, handler.GetToolDefinition(), handler.Handle)
 }

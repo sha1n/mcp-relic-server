@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/blevesearch/bleve/v2"
+	_ "github.com/blevesearch/bleve/v2/search/highlight/highlighter/ansi"
 	"github.com/blevesearch/bleve/v2/search/query"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sha1n/mcp-relic-server/internal/domain"
@@ -13,18 +14,18 @@ import (
 
 // SearchArgument defines search parameters.
 type SearchArgument struct {
-	Query      string `json:"query" jsonschema_description:"Search query (supports wildcards and phrases)"`
-	Repository string `json:"repository,omitempty" jsonschema_description:"Filter by repository name (e.g., github.com/org/repo)"`
-	Extension  string `json:"extension,omitempty" jsonschema_description:"Filter by file extension (e.g., go, py, js)"`
+	Query      string `json:"query" jsonschema_description:"Search query. Use natural language or keywords."`
+	Repository string `json:"repository,omitempty" jsonschema_description:"Filter by repository name (substring match)"`
+	Extension  string `json:"extension,omitempty" jsonschema_description:"Filter by file extension (e.g., 'go', 'py', 'java')"`
 }
 
 // SearchHandler handles the search MCP tool.
 type SearchHandler struct {
-	service *Service
+	service SearchService
 }
 
 // NewSearchHandler creates a new search handler.
-func NewSearchHandler(service *Service) *SearchHandler {
+func NewSearchHandler(service SearchService) *SearchHandler {
 	return &SearchHandler{
 		service: service,
 	}
@@ -68,9 +69,9 @@ func (h *SearchHandler) Handle(ctx context.Context, req *mcp.CallToolRequest, ar
 
 	// Create search request
 	searchReq := bleve.NewSearchRequest(searchQuery)
-	searchReq.Size = h.service.GetSettings().MaxResults
+	searchReq.Size = h.service.MaxResults()
 	searchReq.Fields = []string{domain.CodeFieldRepository, domain.CodeFieldFilePath, domain.CodeFieldExtension, domain.CodeFieldContent}
-	searchReq.Highlight = bleve.NewHighlight()
+	searchReq.Highlight = bleve.NewHighlightWithStyle("ansi")
 	searchReq.Highlight.AddField(domain.CodeFieldContent)
 
 	// Execute search
@@ -93,6 +94,7 @@ func (h *SearchHandler) buildQuery(args SearchArgument) query.Query {
 	// Content query
 	contentQuery := bleve.NewMatchQuery(args.Query)
 	contentQuery.SetField(domain.CodeFieldContent)
+	contentQuery.SetFuzziness(1)
 
 	// Symbols query with boost
 	symbolsQuery := bleve.NewMatchQuery(args.Query)
@@ -111,8 +113,8 @@ func (h *SearchHandler) buildQuery(args SearchArgument) query.Query {
 	must := []query.Query{searchQuery}
 
 	if args.Repository != "" {
-		// Repository is stored in display format (github.com/org/repo)
-		repoQuery := bleve.NewTermQuery(args.Repository)
+		// Substring match on repository name
+		repoQuery := bleve.NewWildcardQuery("*" + args.Repository + "*")
 		repoQuery.SetField(domain.CodeFieldRepository)
 		must = append(must, repoQuery)
 	}
@@ -145,21 +147,25 @@ func (h *SearchHandler) formatResults(results *bleve.SearchResult, queryStr stri
 		// Extract fields
 		repo := ""
 		filePath := ""
+		ext := ""
 		if val, ok := hit.Fields[domain.CodeFieldRepository].(string); ok {
 			repo = val
 		}
 		if val, ok := hit.Fields[domain.CodeFieldFilePath].(string); ok {
 			filePath = val
 		}
+		if val, ok := hit.Fields[domain.CodeFieldExtension].(string); ok {
+			ext = val
+		}
 
 		// Write result header
-		sb.WriteString(fmt.Sprintf("### %d. %s:%s\n", i+1, repo, filePath))
-		sb.WriteString(fmt.Sprintf("**Score**: %.4f\n\n", hit.Score))
+		sb.WriteString(fmt.Sprintf("**%d. %s** `%s`\n", i+1, repo, filePath))
 
-		// Add highlighted fragments
+		// Add highlighted fragments with language-specific code fencing
 		if len(hit.Fragments) > 0 {
 			if fragments, ok := hit.Fragments[domain.CodeFieldContent]; ok {
-				sb.WriteString("```\n")
+				lang := extensionToLanguage(ext)
+				sb.WriteString(fmt.Sprintf("```%s\n", lang))
 				for _, fragment := range fragments {
 					sb.WriteString(fragment)
 					sb.WriteString("\n")
@@ -185,13 +191,19 @@ func (h *SearchHandler) formatResults(results *bleve.SearchResult, queryStr stri
 // GetToolDefinition returns the MCP tool definition.
 func (h *SearchHandler) GetToolDefinition() *mcp.Tool {
 	return &mcp.Tool{
-		Name:        "search_code",
-		Description: "Search for code across indexed git repositories using full-text search",
+		Name: "search",
+		Description: `Search across indexed git repositories for code, documentation, and configuration.
+
+WHEN TO USE: Use this to find implementation patterns, understand how features work
+across the codebase, locate configuration files, or find usage examples.
+
+HOW IT WORKS: Searches file content with optional filtering by repository or
+file extension. Returns matching files with relevant code snippets.`,
 	}
 }
 
 // RegisterSearchTool registers the search tool with an MCP server.
-func RegisterSearchTool(server *mcp.Server, service *Service) {
+func RegisterSearchTool(server *mcp.Server, service SearchService) {
 	handler := NewSearchHandler(service)
 	mcp.AddTool(server, handler.GetToolDefinition(), handler.Handle)
 }

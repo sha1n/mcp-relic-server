@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // MockExecutor records commands and returns configured responses.
@@ -77,4 +79,16 @@ func (m *MockExecutor) MustGetLastCall(t *testing.T) ExecutorCall {
 		t.Fatal("Expected at least one command call")
 	}
 	return m.calls[len(m.calls)-1]
+}
+
+// ExtractTextContent extracts text from an MCP call tool result.
+// Exported for use in integration tests.
+func ExtractTextContent(result *mcp.CallToolResult) string {
+	var sb strings.Builder
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			sb.WriteString(tc.Text)
+		}
+	}
+	return sb.String()
 }
