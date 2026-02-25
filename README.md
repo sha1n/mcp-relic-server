@@ -6,7 +6,7 @@ A Model Context Protocol (MCP) server for AI agents to search and read code acro
 
 ## Features
 
-- **Full-Text Search** — Fast indexing with fuzzy matching across repositories
+- **Full-Text Search** — Fast indexing with fuzzy matching and symbol-aware boosting across repositories
 - **File Reading** — Direct file access with path traversal protection
 - **MCP Compliant** — Seamless integration with AI agents
 - **Dual Transport** — `stdio` for local agents, `sse` for remote/Docker
@@ -232,7 +232,7 @@ The following MCP tools are available:
 
 ### `search`
 
-Search across indexed git repositories for code, documentation, and configuration.
+Search across indexed git repositories for code, documentation, and configuration. Code symbols (function names, type definitions, class names) are automatically extracted and boosted in search results for supported languages (Go, Python, Java, JavaScript, TypeScript, Rust, C/C++).
 
 **Arguments:**
 | Name | Type | Required | Description |
