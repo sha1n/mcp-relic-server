@@ -20,7 +20,6 @@ import (
 func TestNewService(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:      true,
 		URLs:         []string{"git@github.com:test/repo.git"},
 		BaseDir:      dir,
 		SyncInterval: 15 * time.Minute,
@@ -67,7 +66,6 @@ func TestNewService_CreatesDirStructure(t *testing.T) {
 	baseDir := filepath.Join(dir, "nested", "path", "base")
 
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     baseDir,
 		MaxFileSize: 256 * 1024,
 	}
@@ -94,7 +92,6 @@ func TestNewService_CreatesDirStructure(t *testing.T) {
 func TestService_IsReady_InitiallyFalse(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 	}
@@ -117,7 +114,6 @@ func TestService_IsReady_InitiallyFalse(t *testing.T) {
 func TestService_GetIndexAlias_NotReady(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 	}
@@ -141,7 +137,6 @@ func TestService_GetIndexAlias_NotReady(t *testing.T) {
 func TestService_GetRepoDir(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 	}
@@ -166,7 +161,6 @@ func TestService_GetRepoDir(t *testing.T) {
 func TestService_MaxResults(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 		MaxResults:  42,
@@ -190,7 +184,6 @@ func TestService_MaxResults(t *testing.T) {
 func TestService_MaxFileSize(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 512 * 1024,
 		MaxResults:  20,
@@ -214,7 +207,6 @@ func TestService_MaxFileSize(t *testing.T) {
 func TestService_GetSettings(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 		MaxResults:  42,
@@ -239,7 +231,6 @@ func TestService_GetSettings(t *testing.T) {
 func TestService_Close(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 	}
@@ -727,7 +718,6 @@ func TestService_SyncRepo_IncrementalFails_FallsBackToFull(t *testing.T) {
 func TestService_SyncAll_WithMockGit(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -769,7 +759,6 @@ func TestService_SyncAll_WithMockGit(t *testing.T) {
 func TestService_Initialize_LeaderSync(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 1 * time.Second,
@@ -809,7 +798,6 @@ func TestService_Initialize_LeaderSync(t *testing.T) {
 func TestService_RemovesStaleRepos(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo1.git"},
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
@@ -865,7 +853,6 @@ func TestService_RemovesStaleRepos(t *testing.T) {
 func TestService_IndexesReadyAfterSync(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -914,7 +901,6 @@ func TestService_IndexesReadyAfterSync(t *testing.T) {
 func TestService_ContextCancellation(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -945,7 +931,6 @@ func TestService_ContextCancellation(t *testing.T) {
 func TestService_ParallelSync(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled: true,
 		URLs: []string{
 			"git@github.com:test/repo1.git",
 			"git@github.com:test/repo2.git",
@@ -997,7 +982,6 @@ func TestService_ParallelSync(t *testing.T) {
 func TestService_IncrementalIndex(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1057,7 +1041,6 @@ func TestService_IncrementalIndex(t *testing.T) {
 func TestService_IncrementalIndex_ThresholdExceeded(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1126,7 +1109,6 @@ func TestService_IncrementalIndex_ThresholdExceeded(t *testing.T) {
 func TestService_IncrementalIndex_ExactBoundary(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1195,7 +1177,6 @@ func TestService_IncrementalIndex_ExactBoundary(t *testing.T) {
 func TestService_IncrementalIndex_DiffError(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1259,7 +1240,6 @@ func TestService_IncrementalIndex_DiffError(t *testing.T) {
 func TestService_Initialize_FollowerPath(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 2 * time.Second,
@@ -1329,7 +1309,6 @@ func TestService_Initialize_FollowerPath(t *testing.T) {
 func TestService_FetchExistingRepo(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1393,7 +1372,6 @@ func TestService_FetchExistingRepo(t *testing.T) {
 func TestService_SkipReindexWhenUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     dir,
 		SyncTimeout: 5 * time.Second,
@@ -1448,7 +1426,6 @@ func TestService_SkipReindexWhenUnchanged(t *testing.T) {
 func TestService_ErrorIsolation(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled: true,
 		URLs: []string{
 			"git@github.com:test/good.git",
 			"git@github.com:test/bad.git",
@@ -1505,7 +1482,6 @@ func TestService_ErrorIsolation(t *testing.T) {
 func TestService_Initialize_NoURLs(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{},
 		BaseDir:     dir,
 		SyncTimeout: 1 * time.Second,

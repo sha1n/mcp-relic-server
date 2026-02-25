@@ -184,51 +184,12 @@ func TestRunWithDeps_StdioWithCustomTransport(t *testing.T) {
 	}
 }
 
-func TestCreateMCPServer(t *testing.T) {
-	settings := &config.Settings{
-		Transport: "stdio",
-	}
-
-	server, cleanup, err := CreateMCPServer(settings)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if server == nil {
-		t.Error("Expected server to be created")
-	}
-	if cleanup != nil {
-		cleanup()
-	}
-}
-
-func TestCreateMCPServer_WithGitReposDisabled(t *testing.T) {
-	settings := &config.Settings{
-		Transport: "stdio",
-		GitRepos: config.GitReposSettings{
-			Enabled: false,
-		},
-	}
-
-	server, cleanup, err := CreateMCPServer(settings)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if server == nil {
-		t.Error("Expected server to be created")
-	}
-	if cleanup != nil {
-		t.Error("Expected no cleanup when git repos disabled")
-		cleanup()
-	}
-}
-
-func TestCreateMCPServer_WithGitReposEnabled(t *testing.T) {
+func TestCreateMCPServer_WithGitRepos(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.Settings{
 		Transport: "stdio",
 		GitRepos: config.GitReposSettings{
-			Enabled:      true,
 			BaseDir:      dir,
 			SyncInterval: 15 * time.Minute,
 			SyncTimeout:  60 * time.Second,
@@ -254,7 +215,6 @@ func TestCreateMCPServer_WithGitReposInvalidDir(t *testing.T) {
 	settings := &config.Settings{
 		Transport: "stdio",
 		GitRepos: config.GitReposSettings{
-			Enabled:     true,
 			BaseDir:     "/nonexistent/path/that/should/not/exist/relic-test",
 			MaxFileSize: 256 * 1024,
 			MaxResults:  20,
@@ -274,12 +234,6 @@ func TestCreateMCPServer_WithGitReposInitFailure(t *testing.T) {
 	settings := &config.Settings{
 		Transport: "stdio",
 		GitRepos: config.GitReposSettings{
-			Enabled: true,
-			// Use valid base dir but no URLs - Initialize will succeed
-			// but result in no indexes, which means service won't be ready
-			// To test the actual failure path, we need a scenario where
-			// Initialize returns an error. We can trigger this by creating
-			// a lock that's already held.
 			URLs:        []string{"git@github.com:test/repo.git"},
 			BaseDir:     dir,
 			SyncTimeout: 1 * time.Second,

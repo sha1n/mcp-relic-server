@@ -25,7 +25,6 @@ func TestServiceLifecycle_InitializeWithValidConfig(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.GitReposSettings{
-		Enabled:      true,
 		BaseDir:      dir,
 		SyncInterval: 15 * time.Minute,
 		SyncTimeout:  60 * time.Second,
@@ -51,14 +50,13 @@ func TestServiceLifecycle_InitializeWithValidConfig(t *testing.T) {
 	}
 }
 
-func TestServiceLifecycle_DisabledConfig(t *testing.T) {
+func TestServiceLifecycle_NoURLsConfig(t *testing.T) {
 	dir := t.TempDir()
 	settings := &config.GitReposSettings{
-		Enabled: false,
 		BaseDir: dir,
 	}
 
-	// When disabled, service creation should still work
+	// Service creation should still work with no URLs
 	svc, err := gitrepos.NewService(settings)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -67,7 +65,7 @@ func TestServiceLifecycle_DisabledConfig(t *testing.T) {
 
 	// Service should not be ready when no repos are configured
 	if svc.IsReady() {
-		t.Error("Expected service to not be ready when disabled")
+		t.Error("Expected service to not be ready with no URLs")
 	}
 }
 
@@ -75,7 +73,6 @@ func TestServiceLifecycle_CreateDirectoryStructure(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 		MaxResults:  20,
@@ -115,7 +112,6 @@ func TestServiceLifecycle_ConcurrentInitialization(t *testing.T) {
 			dir := t.TempDir()
 
 			settings := &config.GitReposSettings{
-				Enabled:      true,
 				URLs:         []string{"git@github.com:test/repo.git"},
 				BaseDir:      dir,
 				SyncInterval: 15 * time.Minute,
@@ -175,7 +171,6 @@ func TestServiceLifecycle_GracefulShutdown(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 		MaxResults:  20,
@@ -234,7 +229,6 @@ func TestIndex_MultipleReposCreateCombinedAlias(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.GitReposSettings{
-		Enabled:      true,
 		URLs:         []string{"git@github.com:test/repo1.git", "git@github.com:test/repo2.git"},
 		BaseDir:      dir,
 		SyncInterval: 15 * time.Minute,
@@ -481,7 +475,6 @@ func TestSearchTool_SearchWhenNotReady(t *testing.T) {
 	dir := t.TempDir()
 
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		BaseDir:     dir,
 		MaxFileSize: 256 * 1024,
 		MaxResults:  20,
@@ -728,7 +721,6 @@ func setupTestService(t *testing.T, baseDir string, files map[string]string) *gi
 	t.Helper()
 
 	settings := &config.GitReposSettings{
-		Enabled:      true,
 		URLs:         []string{"git@github.com:test/repo.git"},
 		BaseDir:      baseDir,
 		SyncInterval: 15 * time.Minute,

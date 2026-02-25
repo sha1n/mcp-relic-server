@@ -79,27 +79,24 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 	var gitReposSvc mcputil.GitReposToolService
 	var cleanup func()
 
-	// Initialize git repos service if enabled
-	if settings.GitRepos.Enabled {
-		svc, err := gitrepos.NewService(&settings.GitRepos)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create git repos service: %w", err)
-		}
+	svc, err := gitrepos.NewService(&settings.GitRepos)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create git repos service: %w", err)
+	}
 
-		// Initialize in background context (not tied to request context)
-		if err := svc.Initialize(context.Background()); err != nil {
-			slog.Error("Git repos initialization failed", "error", err)
-			// Close service on initialization failure and continue without it
-			if closeErr := svc.Close(); closeErr != nil {
-				slog.Error("Failed to close git repos service", "error", closeErr)
-			}
-		} else {
-			gitReposSvc = svc
-			// Set up cleanup function
-			cleanup = func() {
-				if err := svc.Close(); err != nil {
-					slog.Error("Failed to close git repos service", "error", err)
-				}
+	// Initialize in background context (not tied to request context)
+	if err := svc.Initialize(context.Background()); err != nil {
+		slog.Error("Git repos initialization failed", "error", err)
+		// Close service on initialization failure and continue without it
+		if closeErr := svc.Close(); closeErr != nil {
+			slog.Error("Failed to close git repos service", "error", closeErr)
+		}
+	} else {
+		gitReposSvc = svc
+		// Set up cleanup function
+		cleanup = func() {
+			if err := svc.Close(); err != nil {
+				slog.Error("Failed to close git repos service", "error", err)
 			}
 		}
 	}

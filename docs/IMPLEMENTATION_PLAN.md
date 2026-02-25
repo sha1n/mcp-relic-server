@@ -64,7 +64,6 @@ The implementation is divided into **13 discrete tasks**, each containing code w
 ```go
 // GitReposSettings contains configuration for git repository indexing
 type GitReposSettings struct {
-    Enabled      bool          `mapstructure:"enabled"`
     URLs         []string      `mapstructure:"urls"`
     BaseDir      string        `mapstructure:"base_dir"`
     SyncInterval time.Duration `mapstructure:"sync_interval"`
@@ -77,7 +76,6 @@ type GitReposSettings struct {
 **Configuration Mapping**:
 | Environment Variable | CLI Flag | Default |
 |---------------------|----------|---------|
-| `RELIC_MCP_GIT_REPOS_ENABLED` | `--git-repos-enabled` | `false` |
 | `RELIC_MCP_GIT_REPOS_URLS` | `--git-repos-urls` | `""` |
 | `RELIC_MCP_GIT_REPOS_BASE_DIR` | `--git-repos-base-dir` | `~/.relic-mcp` |
 | `RELIC_MCP_GIT_REPOS_SYNC_INTERVAL` | `--git-repos-sync-interval` | `15m` |
@@ -92,7 +90,7 @@ type GitReposSettings struct {
 4. Test URL parsing from comma-separated string
 5. Test home directory expansion in `BaseDir`
 6. Test validation:
-   - `Enabled=true` requires at least one URL
+   - At least one URL is required
    - `SyncInterval` must be positive
    - `SyncTimeout` must be positive
    - `MaxFileSize` must be positive
@@ -717,10 +715,10 @@ func extensionToLanguage(ext string) string
 type ServerConfig struct {
     Name        string
     Version     string
-    GitReposSvc *gitrepos.Service // Optional, nil if disabled
+    GitReposSvc *gitrepos.Service // nil if initialization failed
 }
 
-// CreateServer creates MCP server with tools conditionally registered
+// CreateServer creates MCP server and registers tools if service is available
 func CreateServer(cfg *ServerConfig) (*server.MCPServer, error) {
     srv := server.NewMCPServer(cfg.Name, cfg.Version)
 
@@ -743,19 +741,16 @@ func RunWithDeps(params RunParams, flags *pflag.FlagSet) error {
     settings, err := params.LoadSettings(flags)
     // ...
 
-    var gitReposSvc *gitrepos.Service
-    if settings.GitRepos.Enabled {
-        gitReposSvc, err = gitrepos.NewService(&settings.GitRepos)
-        if err != nil {
-            return err
-        }
-        defer gitReposSvc.Close()
+    gitReposSvc, err := gitrepos.NewService(&settings.GitRepos)
+    if err != nil {
+        return err
+    }
+    defer gitReposSvc.Close()
 
-        if err := gitReposSvc.Initialize(ctx); err != nil {
-            slog.Error("Git repos initialization failed", "error", err)
-            // Continue without git repos
-            gitReposSvc = nil
-        }
+    if err := gitReposSvc.Initialize(ctx); err != nil {
+        slog.Error("Git repos initialization failed", "error", err)
+        // Continue without git repos
+        gitReposSvc = nil
     }
 
     mcpServer, err := params.CreateServer(&mcp.ServerConfig{
@@ -773,7 +768,7 @@ func RunWithDeps(params RunParams, flags *pflag.FlagSet) error {
 3. Test search tool is accessible via MCP protocol
 4. Test read tool is accessible via MCP protocol
 
-**Commit Message**: `feat(mcp): register search and read tools conditionally`
+**Commit Message**: `feat(mcp): register search and read tools`
 
 ---
 
@@ -793,7 +788,7 @@ func RunWithDeps(params RunParams, flags *pflag.FlagSet) error {
 
 ### 13.1 Service Lifecycle Tests
 1. Test service initializes correctly with valid config
-2. Test service handles disabled config (no-op)
+2. Test service handles empty URLs config
 3. Test service creates directory structure
 4. Test service leader election with concurrent starts
 5. Test service graceful shutdown
@@ -834,7 +829,7 @@ func RunWithDeps(params RunParams, flags *pflag.FlagSet) error {
 // CreateTestRepo creates a git repository with sample files for testing
 func CreateTestRepo(t *testing.T, dir string, files map[string]string) string
 
-// StartTestMCPServer starts an MCP server with git repos enabled for testing
+// StartTestMCPServer starts an MCP server with git repos for testing
 func StartTestMCPServer(t *testing.T, repoURLs []string) (*Service, func())
 ```
 

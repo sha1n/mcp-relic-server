@@ -15,7 +15,7 @@ type GitReposToolService interface {
 type ServerConfig struct {
 	Name        string
 	Version     string
-	GitReposSvc GitReposToolService // Optional, nil if disabled
+	GitReposSvc GitReposToolService // nil if initialization failed
 }
 
 // CreateServer creates and configures the MCP server

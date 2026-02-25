@@ -13,7 +13,7 @@ This specification describes the design for Git repository indexing and code sea
 ### 1.2 Assumptions
 - Users have SSH configured for all repositories (`~/.ssh/config`, ssh-agent, etc.)
 - Repositories are cloned via SSH URLs (e.g., `git@github.com:org/repo.git`)
-- This feature is **opt-in** and disabled by default
+- At least one repository URL must be configured
 
 ### 1.3 Non-Goals
 - Real-time file watching (use `git pull` based refresh)
@@ -106,8 +106,7 @@ All instances open Bleve indexes in **read-only mode** after sync completes. Bol
 
 | Environment Variable | CLI Flag | Description | Default |
 |---------------------|----------|-------------|---------|
-| `RELIC_MCP_GIT_REPOS_ENABLED` | `--git-repos-enabled` | Enable git repository indexing | `false` |
-| `RELIC_MCP_GIT_REPOS_URLS` | `--git-repos-urls` | Comma-separated SSH URLs | (none) |
+| `RELIC_MCP_GIT_REPOS_URLS` | `--git-repos-urls` | Comma-separated SSH URLs (required) | (none) |
 | `RELIC_MCP_GIT_REPOS_BASE_DIR` | `--git-repos-base-dir` | Base directory for all git data | `~/.relic-mcp` |
 | `RELIC_MCP_GIT_REPOS_SYNC_INTERVAL` | `--git-repos-sync-interval` | Min interval between syncs | `15m` |
 | `RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT` | `--git-repos-sync-timeout` | Max time to wait for sync lock | `60s` |
@@ -143,7 +142,6 @@ var DefaultExcludePatterns = []string{
 ```go
 // GitReposSettings in internal/config/settings.go
 type GitReposSettings struct {
-    Enabled      bool          `mapstructure:"enabled"`
     URLs         []string      `mapstructure:"urls"`
     BaseDir      string        `mapstructure:"base_dir"`
     SyncInterval time.Duration `mapstructure:"sync_interval"`
@@ -848,7 +846,7 @@ if !strings.HasPrefix(fullPath, repoDir) {
 ### Phase 4: MCP Integration
 - [ ] Implement `search` tool handler with result formatting
 - [ ] Implement `read` tool handler with path validation
-- [ ] Register tools conditionally (only when enabled)
+- [ ] Register tools when git repos service is available
 - [ ] Add tool metadata defaults
 
 ### Phase 5: Testing & Documentation

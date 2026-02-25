@@ -33,7 +33,6 @@ type BasicAuthSettings struct {
 
 // GitReposSettings configuration for git repository indexing
 type GitReposSettings struct {
-	Enabled      bool          `mapstructure:"enabled"`
 	URLs         []string      `mapstructure:"urls"`
 	BaseDir      string        `mapstructure:"base_dir"`
 	SyncInterval time.Duration `mapstructure:"sync_interval"`
@@ -69,7 +68,6 @@ func LoadSettingsWithFlags(flags *pflag.FlagSet) (*Settings, error) {
 	v.SetDefault("auth.type", AuthTypeNone)
 
 	// Git repos defaults
-	v.SetDefault("git_repos.enabled", false)
 	v.SetDefault("git_repos.base_dir", defaultGitReposBaseDir())
 	v.SetDefault("git_repos.sync_interval", 15*time.Minute)
 	v.SetDefault("git_repos.sync_timeout", 60*time.Second)
@@ -88,7 +86,6 @@ func LoadSettingsWithFlags(flags *pflag.FlagSet) (*Settings, error) {
 	_ = v.BindEnv("auth.api_keys", "RELIC_MCP_AUTH_API_KEYS")
 
 	// Git repos env var bindings
-	_ = v.BindEnv("git_repos.enabled", "RELIC_MCP_GIT_REPOS_ENABLED")
 	_ = v.BindEnv("git_repos.urls", "RELIC_MCP_GIT_REPOS_URLS")
 	_ = v.BindEnv("git_repos.base_dir", "RELIC_MCP_GIT_REPOS_BASE_DIR")
 	_ = v.BindEnv("git_repos.sync_interval", "RELIC_MCP_GIT_REPOS_SYNC_INTERVAL")
@@ -107,7 +104,6 @@ func LoadSettingsWithFlags(flags *pflag.FlagSet) (*Settings, error) {
 		_ = v.BindPFlag("auth.api_keys", flags.Lookup("auth-api-keys"))
 
 		// Git repos CLI flags
-		_ = v.BindPFlag("git_repos.enabled", flags.Lookup("git-repos-enabled"))
 		_ = v.BindPFlag("git_repos.urls", flags.Lookup("git-repos-urls"))
 		_ = v.BindPFlag("git_repos.base_dir", flags.Lookup("git-repos-base-dir"))
 		_ = v.BindPFlag("git_repos.sync_interval", flags.Lookup("git-repos-sync-interval"))
@@ -248,12 +244,8 @@ func ValidateSettings(s *Settings) error {
 
 // validateGitReposSettings validates the git repos configuration
 func validateGitReposSettings(g *GitReposSettings) error {
-	if !g.Enabled {
-		return nil // No validation needed when disabled
-	}
-
 	if len(g.URLs) == 0 {
-		return errors.New("git-repos-enabled requires at least one repository URL (git-repos-urls)")
+		return errors.New("at least one repository URL is required (git-repos-urls)")
 	}
 
 	if g.SyncInterval <= 0 {

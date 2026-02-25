@@ -48,12 +48,13 @@ make mcp-add-claude-dev
 - `internal/app/` - Application orchestration (runner, SSE server setup)
 - `internal/mcp/` - MCP server implementation using the official `modelcontextprotocol/go-sdk`
 - `internal/config/` - Settings and configuration (env vars, CLI flags, .env files)
+- `internal/gitrepos/` - Git repository indexing, search, and file reading (Bleve-based)
 - `internal/auth/` - Authentication middleware (basic auth, API key)
 - `tests/integration/` - Integration tests with testkit utilities
 
 ### Key Flows
 
-**Startup**: `main.go` → `app.RunWithDeps()` → creates MCP server → starts transport (stdio or SSE)
+**Startup**: `main.go` → `app.RunWithDeps()` → initializes git repos service → creates MCP server → starts transport (stdio or SSE)
 
 **Transports**: Supports `stdio` (default, local process) and `sse` (HTTP with optional auth). Mutually exclusive.
 

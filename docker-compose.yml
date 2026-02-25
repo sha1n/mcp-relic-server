@@ -11,7 +11,6 @@ services:
     environment:
       - RELIC_MCP_HOST=0.0.0.0
       - RELIC_MCP_PORT=8080
-      - RELIC_MCP_GIT_REPOS_ENABLED=true
       # Add your repositories here, comma separated
       - RELIC_MCP_GIT_REPOS_URLS=https://github.com/sha1n/mcp-relic-server.git
       - RELIC_MCP_GIT_REPOS_SYNC_INTERVAL=15m

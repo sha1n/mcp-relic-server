@@ -56,9 +56,6 @@ A `docker-compose.yml` file is included for easy deployment.
 Create a `.env` file or set environment variables:
 
 ```bash
-# Enable git repository indexing
-RELIC_MCP_GIT_REPOS_ENABLED=true
-
 # Comma-separated list of SSH URLs to index
 RELIC_MCP_GIT_REPOS_URLS=git@github.com:org/repo1.git,git@github.com:org/repo2.git
 ```
@@ -106,8 +103,7 @@ All settings can be configured via environment variables, CLI flags, or `.env` f
 
 | Flag | Env Variable | Default | Description |
 |------|--------------|---------|-------------|
-| `--git-repos-enabled` | `RELIC_MCP_GIT_REPOS_ENABLED` | `false` | Enable git repository indexing |
-| `--git-repos-urls` | `RELIC_MCP_GIT_REPOS_URLS` | | Comma-separated SSH URLs |
+| `--git-repos-urls` | `RELIC_MCP_GIT_REPOS_URLS` | | Comma-separated SSH URLs (required) |
 | `--git-repos-base-dir` | `RELIC_MCP_GIT_REPOS_BASE_DIR` | `~/.relic-mcp` | Base directory for clones and indexes |
 | `--git-repos-sync-interval` | `RELIC_MCP_GIT_REPOS_SYNC_INTERVAL` | `15m` | Minimum interval between syncs |
 | `--git-repos-sync-timeout` | `RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT` | `60s` | Max time to wait for sync lock |
@@ -126,8 +122,8 @@ Best for local AI agents that spawn the server as a subprocess.
 # Basic usage
 relic-mcp
 
-# With git repos enabled
-relic-mcp --git-repos-enabled --git-repos-urls "git@github.com:org/repo.git"
+# With git repos
+relic-mcp --git-repos-urls "git@github.com:org/repo.git"
 ```
 
 **Characteristics:**
@@ -158,7 +154,6 @@ relic-mcp --transport sse \
   --port 8080 \
   --auth-type apikey \
   --auth-api-keys "your-secret-key" \
-  --git-repos-enabled \
   --git-repos-urls "git@github.com:org/repo1.git,git@github.com:org/repo2.git"
 ```
 
@@ -183,7 +178,6 @@ Add the MCP server to Claude Code:
 ```bash
 # Using the CLI
 claude mcp add --scope user --transport stdio relic -- relic-mcp \
-  --git-repos-enabled \
   --git-repos-urls "git@github.com:your-org/your-repo.git"
 ```
 
@@ -195,7 +189,6 @@ Or add manually to `~/.claude/settings.json`:
     "relic": {
       "command": "relic-mcp",
       "args": [
-        "--git-repos-enabled",
         "--git-repos-urls", "git@github.com:org/repo1.git,git@github.com:org/repo2.git"
       ]
     }
@@ -225,7 +218,7 @@ For any MCP-compatible client, use:
 
 **Stdio:**
 - Command: `relic-mcp`
-- Args: `["--git-repos-enabled", "--git-repos-urls", "git@github.com:org/repo.git"]`
+- Args: `["--git-repos-urls", "git@github.com:org/repo.git"]`
 
 **SSE:**
 - URL: `http://<host>:<port>/sse`
@@ -235,7 +228,7 @@ For any MCP-compatible client, use:
 
 ## MCP Tools
 
-When git repository indexing is enabled, the following tools are available:
+The following MCP tools are available:
 
 ### `search`
 
@@ -283,7 +276,6 @@ Read the full content of a file from an indexed git repository.
 
 `.env` file:
 ```bash
-RELIC_MCP_GIT_REPOS_ENABLED=true
 RELIC_MCP_GIT_REPOS_URLS=git@github.com:myorg/frontend.git,git@github.com:myorg/backend.git
 RELIC_MCP_GIT_REPOS_BASE_DIR=~/.relic-mcp
 RELIC_MCP_GIT_REPOS_MAX_RESULTS=30
@@ -309,7 +301,6 @@ services:
       - RELIC_MCP_PORT=8080
       - RELIC_MCP_AUTH_TYPE=apikey
       - RELIC_MCP_AUTH_API_KEYS=your-secret-api-key
-      - RELIC_MCP_GIT_REPOS_ENABLED=true
       - RELIC_MCP_GIT_REPOS_URLS=git@github.com:org/repo1.git,git@github.com:org/repo2.git
     volumes:
       - relic-data:/root/.relic-mcp
@@ -328,7 +319,6 @@ relic-mcp \
   --auth-type basic \
   --auth-basic-username team \
   --auth-basic-password "secure-password" \
-  --git-repos-enabled \
   --git-repos-urls "git@github.com:company/monorepo.git" \
   --git-repos-sync-interval 5m \
   --git-repos-max-results 50

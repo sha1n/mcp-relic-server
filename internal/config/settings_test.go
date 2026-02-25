@@ -215,14 +215,14 @@ func TestLoadSettingsWithFlags_AllFlagTypes(t *testing.T) {
 // --- ValidateSettings Tests ---
 
 func TestValidateSettings_ValidNone(t *testing.T) {
-	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: AuthTypeNone}}
+	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: AuthTypeNone}, GitRepos: validGitRepos()}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for valid none auth, got: %v", err)
 	}
 }
 
 func TestValidateSettings_ValidNone_EmptyType(t *testing.T) {
-	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: ""}}
+	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: ""}, GitRepos: validGitRepos()}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for empty auth type, got: %v", err)
 	}
@@ -238,6 +238,7 @@ func TestValidateSettings_ValidBasic(t *testing.T) {
 				Password: "secret",
 			},
 		},
+		GitRepos: validGitRepos(),
 	}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for valid basic auth, got: %v", err)
@@ -251,6 +252,7 @@ func TestValidateSettings_ValidAPIKey(t *testing.T) {
 			Type:    AuthTypeAPIKey,
 			APIKeys: []string{"key1", "key2"},
 		},
+		GitRepos: validGitRepos(),
 	}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for valid apikey auth, got: %v", err)
@@ -418,14 +420,14 @@ func TestValidateSettings_UnknownAuthType(t *testing.T) {
 // --- Transport Validation Tests ---
 
 func TestValidateSettings_ValidTransportStdio(t *testing.T) {
-	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: AuthTypeNone}}
+	s := &Settings{Transport: "stdio", Auth: AuthSettings{Type: AuthTypeNone}, GitRepos: validGitRepos()}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for valid stdio transport, got: %v", err)
 	}
 }
 
 func TestValidateSettings_ValidTransportSSE(t *testing.T) {
-	s := &Settings{Transport: "sse", Auth: AuthSettings{Type: AuthTypeNone}}
+	s := &Settings{Transport: "sse", Auth: AuthSettings{Type: AuthTypeNone}, GitRepos: validGitRepos()}
 	if err := ValidateSettings(s); err != nil {
 		t.Errorf("Expected no error for valid sse transport, got: %v", err)
 	}
@@ -461,9 +463,20 @@ func TestValidateSettings_InvalidTransport(t *testing.T) {
 
 // --- GitReposSettings Tests ---
 
+// validGitRepos returns a valid GitReposSettings for use in tests that focus on other settings
+func validGitRepos() GitReposSettings {
+	return GitReposSettings{
+		URLs:         []string{"git@github.com:org/repo.git"},
+		BaseDir:      "/tmp/test",
+		SyncInterval: 15 * time.Minute,
+		SyncTimeout:  60 * time.Second,
+		MaxFileSize:  256 * 1024,
+		MaxResults:   20,
+	}
+}
+
 func TestLoadSettings_GitReposDefaults(t *testing.T) {
 	// Clear any existing env vars
-	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_ENABLED")
 	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_URLS")
 	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_BASE_DIR")
 	_ = os.Unsetenv("RELIC_MCP_GIT_REPOS_SYNC_INTERVAL")
@@ -474,10 +487,6 @@ func TestLoadSettings_GitReposDefaults(t *testing.T) {
 	settings, err := LoadSettings()
 	if err != nil {
 		t.Fatalf("Failed to load settings: %v", err)
-	}
-
-	if settings.GitRepos.Enabled {
-		t.Error("Expected git repos disabled by default")
 	}
 
 	if len(settings.GitRepos.URLs) != 0 {
@@ -507,7 +516,6 @@ func TestLoadSettings_GitReposDefaults(t *testing.T) {
 }
 
 func TestLoadSettings_GitReposEnvVars(t *testing.T) {
-	t.Setenv("RELIC_MCP_GIT_REPOS_ENABLED", "true")
 	t.Setenv("RELIC_MCP_GIT_REPOS_URLS", "git@github.com:org/repo1.git,git@github.com:org/repo2.git")
 	t.Setenv("RELIC_MCP_GIT_REPOS_BASE_DIR", "/custom/path")
 	t.Setenv("RELIC_MCP_GIT_REPOS_SYNC_INTERVAL", "30m")
@@ -518,10 +526,6 @@ func TestLoadSettings_GitReposEnvVars(t *testing.T) {
 	settings, err := LoadSettings()
 	if err != nil {
 		t.Fatalf("Failed to load settings: %v", err)
-	}
-
-	if !settings.GitRepos.Enabled {
-		t.Error("Expected git repos enabled")
 	}
 
 	if len(settings.GitRepos.URLs) != 2 {
@@ -604,7 +608,6 @@ func TestLoadSettings_GitReposBaseDirExpandHome(t *testing.T) {
 
 func TestLoadSettingsWithFlags_GitReposFlags(t *testing.T) {
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	flags.Bool("git-repos-enabled", false, "")
 	flags.StringSlice("git-repos-urls", nil, "")
 	flags.String("git-repos-base-dir", "", "")
 	flags.Duration("git-repos-sync-interval", 0, "")
@@ -612,7 +615,6 @@ func TestLoadSettingsWithFlags_GitReposFlags(t *testing.T) {
 	flags.Int64("git-repos-max-file-size", 0, "")
 	flags.Int("git-repos-max-results", 0, "")
 
-	_ = flags.Set("git-repos-enabled", "true")
 	_ = flags.Set("git-repos-urls", "git@github.com:org/repo.git")
 	_ = flags.Set("git-repos-base-dir", "/flag/path")
 	_ = flags.Set("git-repos-sync-interval", "5m")
@@ -623,10 +625,6 @@ func TestLoadSettingsWithFlags_GitReposFlags(t *testing.T) {
 	settings, err := LoadSettingsWithFlags(flags)
 	if err != nil {
 		t.Fatalf("Failed to load settings: %v", err)
-	}
-
-	if !settings.GitRepos.Enabled {
-		t.Error("Expected git repos enabled from flag")
 	}
 
 	if len(settings.GitRepos.URLs) != 1 || settings.GitRepos.URLs[0] != "git@github.com:org/repo.git" {
@@ -655,23 +653,16 @@ func TestLoadSettingsWithFlags_GitReposFlags(t *testing.T) {
 }
 
 func TestLoadSettingsWithFlags_GitReposFlagsOverrideEnv(t *testing.T) {
-	t.Setenv("RELIC_MCP_GIT_REPOS_ENABLED", "false")
 	t.Setenv("RELIC_MCP_GIT_REPOS_MAX_RESULTS", "100")
 
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	flags.Bool("git-repos-enabled", false, "")
 	flags.Int("git-repos-max-results", 0, "")
 
-	_ = flags.Set("git-repos-enabled", "true")
 	_ = flags.Set("git-repos-max-results", "25")
 
 	settings, err := LoadSettingsWithFlags(flags)
 	if err != nil {
 		t.Fatalf("Failed to load settings: %v", err)
-	}
-
-	if !settings.GitRepos.Enabled {
-		t.Error("Expected flag to override env for enabled")
 	}
 
 	if settings.GitRepos.MaxResults != 25 {
@@ -681,14 +672,25 @@ func TestLoadSettingsWithFlags_GitReposFlagsOverrideEnv(t *testing.T) {
 
 // --- GitRepos Validation Tests ---
 
-func TestValidateSettings_GitReposDisabled(t *testing.T) {
+func TestValidateSettings_GitReposNoURLs(t *testing.T) {
 	s := &Settings{
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
-		GitRepos:  GitReposSettings{Enabled: false},
+		GitRepos: GitReposSettings{
+			URLs:         []string{},
+			BaseDir:      "/tmp/test",
+			SyncInterval: 15 * time.Minute,
+			SyncTimeout:  60 * time.Second,
+			MaxFileSize:  256 * 1024,
+			MaxResults:   20,
+		},
 	}
-	if err := ValidateSettings(s); err != nil {
-		t.Errorf("Expected no error for disabled git repos, got: %v", err)
+	err := ValidateSettings(s)
+	if err == nil {
+		t.Fatal("Expected error for git repos without URLs")
+	}
+	if !strings.Contains(err.Error(), "at least one repository URL") {
+		t.Errorf("Expected 'at least one repository URL' in error, got: %v", err)
 	}
 }
 
@@ -697,7 +699,6 @@ func TestValidateSettings_GitReposValid(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 15 * time.Minute,
@@ -711,12 +712,11 @@ func TestValidateSettings_GitReposValid(t *testing.T) {
 	}
 }
 
-func TestValidateSettings_GitReposEnabledNoURLs(t *testing.T) {
+func TestValidateSettings_GitReposEmptyURLs(t *testing.T) {
 	s := &Settings{
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 15 * time.Minute,
@@ -727,10 +727,10 @@ func TestValidateSettings_GitReposEnabledNoURLs(t *testing.T) {
 	}
 	err := ValidateSettings(s)
 	if err == nil {
-		t.Fatal("Expected error for enabled git repos without URLs")
+		t.Fatal("Expected error for git repos without URLs")
 	}
-	if !strings.Contains(err.Error(), "requires at least one repository URL") {
-		t.Errorf("Expected 'requires at least one repository URL' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "at least one repository URL") {
+		t.Errorf("Expected 'at least one repository URL' in error, got: %v", err)
 	}
 }
 
@@ -739,7 +739,6 @@ func TestValidateSettings_GitReposInvalidSyncInterval(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 0,
@@ -762,7 +761,6 @@ func TestValidateSettings_GitReposInvalidSyncTimeout(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 15 * time.Minute,
@@ -785,7 +783,6 @@ func TestValidateSettings_GitReposInvalidMaxFileSize(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 15 * time.Minute,
@@ -808,7 +805,6 @@ func TestValidateSettings_GitReposInvalidMaxResults(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "/tmp/test",
 			SyncInterval: 15 * time.Minute,
@@ -831,7 +827,6 @@ func TestValidateSettings_GitReposEmptyBaseDir(t *testing.T) {
 		Transport: "stdio",
 		Auth:      AuthSettings{Type: AuthTypeNone},
 		GitRepos: GitReposSettings{
-			Enabled:      true,
 			URLs:         []string{"git@github.com:org/repo.git"},
 			BaseDir:      "",
 			SyncInterval: 15 * time.Minute,

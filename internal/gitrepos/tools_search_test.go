@@ -397,7 +397,6 @@ func setupSearchServiceWithMaxResults(t *testing.T, baseDir string, files map[st
 	t.Helper()
 
 	settings := &config.GitReposSettings{
-		Enabled:     true,
 		URLs:        []string{"git@github.com:test/repo.git"},
 		BaseDir:     baseDir,
 		SyncTimeout: 5 * time.Second,

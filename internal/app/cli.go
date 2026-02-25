@@ -20,7 +20,6 @@ func RegisterFlags(flags *pflag.FlagSet) {
 	flags.StringSliceP("auth-api-keys", "k", nil, "API keys (comma-separated)")
 
 	// Git repos flags
-	flags.Bool("git-repos-enabled", false, "Enable git repository indexing")
 	flags.StringSlice("git-repos-urls", nil, "Git repository SSH URLs (comma-separated)")
 	flags.String("git-repos-base-dir", "", "Base directory for git data (default: ~/.relic-mcp)")
 	flags.Duration("git-repos-sync-interval", 15*time.Minute, "Minimum interval between syncs")
