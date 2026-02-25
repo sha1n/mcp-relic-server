@@ -17,7 +17,7 @@ This specification describes the design for Git repository indexing and code sea
 
 ### 1.3 Non-Goals
 - Real-time file watching (use `git pull` based refresh)
-- Semantic code analysis (AST parsing, symbol extraction)
+- Deep semantic code analysis (AST parsing); note: regex-based symbol extraction is implemented for search boosting
 - Multi-branch indexing (default branch only)
 
 ---
@@ -658,16 +658,25 @@ func HandleAuth(next http.Handler) http.Handler {
 ```
 internal/
 ├── gitrepos/
-│   ├── service.go       # Main service: sync, index management
-│   ├── git.go           # Git operations (clone, pull, diff)
-│   ├── indexer.go       # Bleve indexing logic
-│   ├── manifest.go      # Manifest read/write
-│   ├── filelock.go      # flock wrapper
-│   ├── filter.go        # File filtering (patterns, binary detection)
-│   ├── tools.go         # MCP tool handlers (search, read)
-│   └── service_test.go
+│   ├── service.go          # Main service: sync, index management
+│   ├── interfaces.go       # Consumer-defined interfaces (SearchService, ReadService, etc.)
+│   ├── git.go              # Git operations (clone, pull, diff)
+│   ├── indexer.go          # Bleve indexing logic
+│   ├── manifest.go         # Manifest read/write
+│   ├── filelock.go         # flock wrapper
+│   ├── filter.go           # File filtering (patterns, binary detection)
+│   ├── symbols.go          # Regex-based symbol extraction per language
+│   ├── url.go              # SSH URL parsing and repo ID utilities
+│   ├── tools_search.go     # MCP search tool handler
+│   ├── tools_read.go       # MCP read tool handler
+│   ├── testing.go          # Shared test helpers (MockExecutor, ExtractTextContent)
+│   └── mocks_test.go       # Mock implementations for all interfaces
+├── mcp/
+│   └── server.go           # GitReposToolService interface + CreateServer
+├── domain/
+│   └── code.go             # CodeDocument model + field constants
 └── config/
-    └── settings.go      # Add GitReposSettings
+    └── settings.go         # GitReposSettings
 ```
 
 ---
@@ -827,33 +836,34 @@ if !strings.HasPrefix(fullPath, repoDir) {
 ## 11. Implementation Phases
 
 ### Phase 1: Core Infrastructure
-- [ ] Add `GitReposSettings` to config
-- [ ] Implement `filelock.go` using `syscall.Flock`
-- [ ] Implement `manifest.go` for state persistence
-- [ ] Add base directory structure creation
+- [x] Add `GitReposSettings` to config
+- [x] Implement `filelock.go` using `syscall.Flock`
+- [x] Implement `manifest.go` for state persistence
+- [x] Add base directory structure creation
 
 ### Phase 2: Git Operations
-- [ ] Implement `git.go` with clone, fetch, reset, diff
-- [ ] Add SSH URL parsing and repo ID generation
-- [ ] Implement parallel sync with semaphore
+- [x] Implement `git.go` with clone, fetch, reset, diff
+- [x] Add SSH URL parsing and repo ID generation
+- [x] Implement parallel sync with semaphore
 
 ### Phase 3: Indexing
-- [ ] Implement `filter.go` with pattern matching and binary detection
-- [ ] Implement `indexer.go` with batched, memory-efficient indexing
-- [ ] Add incremental indexing support
-- [ ] Create `IndexAlias` for multi-repo search
+- [x] Implement `filter.go` with pattern matching and binary detection
+- [x] Implement `indexer.go` with batched, memory-efficient indexing
+- [x] Add incremental indexing support
+- [x] Create `IndexAlias` for multi-repo search
+- [x] Add regex-based symbol extraction (`symbols.go`)
 
 ### Phase 4: MCP Integration
-- [ ] Implement `search` tool handler with result formatting
-- [ ] Implement `read` tool handler with path validation
-- [ ] Register tools when git repos service is available
-- [ ] Add tool metadata defaults
+- [x] Implement `search` tool handler with result formatting
+- [x] Implement `read` tool handler with path validation
+- [x] Register tools when git repos service is available
+- [x] Add tool metadata defaults
 
 ### Phase 5: Testing & Documentation
-- [ ] Unit tests for each component
-- [ ] Integration tests with testkit
-- [ ] Update README and configuration docs
-- [ ] Add example configurations
+- [x] Unit tests for each component
+- [x] Integration tests with testkit
+- [x] Update README and configuration docs
+- [x] Add example configurations
 
 ---
 
