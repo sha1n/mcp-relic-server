@@ -63,6 +63,18 @@ make mcp-add-claude-dev
 - `mcp.Server` - The MCP server from the official SDK
 - `config.Settings` - Application configuration loaded from env/flags/.env
 - `auth.NewMiddleware()` - Creates HTTP middleware for authentication
+- `gitrepos.SearchService` / `gitrepos.ReadService` - Narrow interfaces for MCP tool handlers
+- `gitrepos.GitOperations`, `IndexOperations`, `ManifestOperations`, `SyncLock` - Component interfaces for dependency injection
+- `mcp.GitReposToolService` - Combined interface used by the MCP server layer
+
+### Gitrepos Architecture
+
+The `internal/gitrepos/` package uses **consumer-defined interfaces** (Go convention). Interfaces are defined in `interfaces.go` at the consumer level, not alongside implementations.
+
+- `Service` struct holds interface fields (`GitOperations`, `IndexOperations`, etc.) instead of concrete types
+- `NewService()` creates production implementations; `NewServiceWithDeps()` accepts injected mocks for testing
+- `symbols.go` extracts code symbols (functions, types, classes) via regex patterns per language, boosting search relevance
+- Handler tests use mocks for validation logic; integration tests use real Bleve indexes for search behavior
 
 ### Testing
 
