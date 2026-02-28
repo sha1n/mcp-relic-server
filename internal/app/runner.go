@@ -84,21 +84,21 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 		return nil, nil, fmt.Errorf("failed to create git repos service: %w", err)
 	}
 
+	// Set cleanup before Initialize so a panic during init doesn't leak the service
+	cleanup = func() {
+		if err := svc.Close(); err != nil {
+			slog.Error("Failed to close git repos service", "error", err)
+		}
+	}
+
 	// Initialize in background context (not tied to request context)
 	if err := svc.Initialize(context.Background()); err != nil {
 		slog.Error("Git repos initialization failed", "error", err)
 		// Close service on initialization failure and continue without it
-		if closeErr := svc.Close(); closeErr != nil {
-			slog.Error("Failed to close git repos service", "error", closeErr)
-		}
+		cleanup()
+		cleanup = nil
 	} else {
 		gitReposSvc = svc
-		// Set up cleanup function
-		cleanup = func() {
-			if err := svc.Close(); err != nil {
-				slog.Error("Failed to close git repos service", "error", err)
-			}
-		}
 	}
 
 	server := mcputil.CreateServer(mcputil.ServerConfig{
