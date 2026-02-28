@@ -36,7 +36,9 @@ var languagePatterns = map[string]LanguageRegex{
 			regexp.MustCompile(`class\s+(\w+)`),
 			regexp.MustCompile(`interface\s+(\w+)`),
 			regexp.MustCompile(`enum\s+(\w+)`),
-			regexp.MustCompile(`(?:public|protected|private|static|\s) +[\w\<\>\[\]]+\s+(\w+) *\(`), // Method
+			// Method: requires access modifier or annotation prefix, return type, then method name
+			// Excludes control flow keywords (if, while, for, switch, catch)
+			regexp.MustCompile(`(?:(?:public|protected|private|static|final|abstract|synchronized|native|default)\s+)+(?:<[^>]+>\s+)?[\w\[\].]+(?:<[^>]*>)?(?:\[\])?\s+(\w+)\s*\(`),
 		},
 	},
 	"js": {
