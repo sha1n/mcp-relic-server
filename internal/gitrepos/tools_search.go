@@ -3,6 +3,7 @@ package gitrepos
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/blevesearch/bleve/v2"
@@ -113,8 +114,8 @@ func (h *SearchHandler) buildQuery(args SearchArgument) query.Query {
 	must := []query.Query{searchQuery}
 
 	if args.Repository != "" {
-		// Substring match on repository name
-		repoQuery := bleve.NewWildcardQuery("*" + args.Repository + "*")
+		// Substring match on repository name using regexp with escaped input
+		repoQuery := bleve.NewRegexpQuery(".*" + regexp.QuoteMeta(strings.ToLower(args.Repository)) + ".*")
 		repoQuery.SetField(domain.CodeFieldRepository)
 		must = append(must, repoQuery)
 	}
