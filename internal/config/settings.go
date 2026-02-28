@@ -230,7 +230,7 @@ func ValidateSettings(s *Settings) error {
 	case "stdio", "sse":
 		// valid
 	default:
-		return errors.New("transport must be 'stdio' or 'sse', got: " + s.Transport)
+		return fmt.Errorf("transport must be 'stdio' or 'sse', got: %q", s.Transport)
 	}
 
 	hasBasicCreds := s.Auth.Basic.Username != "" || s.Auth.Basic.Password != ""
@@ -256,7 +256,7 @@ func ValidateSettings(s *Settings) error {
 			return errors.New("auth-type 'apikey' requires at least one API key")
 		}
 	default:
-		return errors.New("unknown auth-type: " + s.Auth.Type)
+		return fmt.Errorf("unknown auth-type: %q", s.Auth.Type)
 	}
 
 	// Validate git repos settings
