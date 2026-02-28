@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/sha1n/mcp-relic-server/internal/app"
@@ -24,6 +25,7 @@ func main() {
 
 func runMain(args []string, exit func(int)) {
 	if err := Execute(Version, Build, ProgramName, args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		exit(1)
 	}
 }
