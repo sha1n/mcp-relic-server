@@ -1083,7 +1083,7 @@ func TestService_IncrementalIndex_ThresholdExceeded(t *testing.T) {
 
 	var diffLines strings.Builder
 	for i := 0; i < 101; i++ {
-		diffLines.WriteString(fmt.Sprintf("file%d.go\n", i))
+		fmt.Fprintf(&diffLines, "file%d.go\n", i)
 	}
 
 	mock2 := NewMockExecutor()
@@ -1151,7 +1151,7 @@ func TestService_IncrementalIndex_ExactBoundary(t *testing.T) {
 
 	var diffLines strings.Builder
 	for i := 0; i < 100; i++ {
-		diffLines.WriteString(fmt.Sprintf("file%d.go\n", i))
+		fmt.Fprintf(&diffLines, "file%d.go\n", i)
 	}
 
 	mock2 := NewMockExecutor()
