@@ -41,7 +41,7 @@ type IndexOperations interface {
 
 // ManifestOperations abstracts manifest operations for testing.
 type ManifestOperations interface {
-	GetRepoState(repoID string) *RepoState
+	GetRepoState(repoID string) RepoState
 	SetRepoState(repoID string, state RepoState)
 	HasRepo(repoID string) bool
 	RemoveStaleRepos(urls []string) []string

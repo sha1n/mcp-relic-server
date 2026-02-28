@@ -268,7 +268,7 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 						state.LastCommit = currentCommit
 						state.LastIndexed = currentCommit
 						state.LastPull = time.Now()
-						s.manifest.SetRepoState(repoID, *state)
+						s.manifest.SetRepoState(repoID, state)
 						slog.Info("Incremental index complete", "repo_id", repoID, "indexed", indexed)
 						return nil
 					}
@@ -289,7 +289,7 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 		state.LastIndexed = currentCommit
 		state.FileCount = fileCount
 		state.LastPull = time.Now()
-		s.manifest.SetRepoState(repoID, *state)
+		s.manifest.SetRepoState(repoID, state)
 		slog.Info("Full index complete", "repo_id", repoID, "file_count", fileCount)
 	} else {
 		slog.Info("Repository already up to date", "repo_id", repoID)
