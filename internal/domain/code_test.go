@@ -102,6 +102,7 @@ func TestCodeFieldConstants(t *testing.T) {
 		{"CodeFieldFilePath", CodeFieldFilePath, "file_path"},
 		{"CodeFieldExtension", CodeFieldExtension, "extension"},
 		{"CodeFieldContent", CodeFieldContent, "content"},
+		{"CodeFieldSymbols", CodeFieldSymbols, "symbols"},
 	}
 
 	for _, tt := range tests {
