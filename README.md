@@ -352,6 +352,15 @@ Binary files are also detected by content (null bytes in first 512 bytes).
 - **Repository isolation**: Only configured repositories are accessible
 - **File size limits**: Large files are rejected to prevent memory exhaustion
 - **Binary detection**: Binary files cannot be read via the `read` tool
+- **Constant-time comparison**: Auth credentials are compared using `crypto/subtle` to prevent timing attacks
+
+**HTTPS Requirement:** When using SSE transport with authentication (`basic` or `apikey`), credentials are sent in HTTP headers. RELIC does not terminate TLS itself — you **must** place it behind a TLS-terminating reverse proxy (e.g., nginx, Caddy, or a cloud load balancer) in production. Without TLS, credentials are transmitted in plaintext.
+
+**Deployment recommendations for SSE with auth:**
+- Terminate TLS at a reverse proxy in front of RELIC
+- Use environment variables or a secrets manager for credentials — avoid CLI flags in process listings
+- Apply rate limiting at the reverse proxy to mitigate brute-force attempts
+- Bind to `127.0.0.1` when running behind a local reverse proxy (`--host 127.0.0.1`)
 
 ---
 
