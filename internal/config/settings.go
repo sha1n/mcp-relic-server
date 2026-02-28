@@ -217,6 +217,14 @@ func filterEmptyStrings(s []string) []string {
 // ValidateSettings checks for conflicting configurations.
 // Returns an error if the settings contain mutually exclusive or incomplete auth config.
 func ValidateSettings(s *Settings) error {
+	// Trim auth credentials before validation
+	s.Auth.Basic.Username = strings.TrimSpace(s.Auth.Basic.Username)
+	s.Auth.Basic.Password = strings.TrimSpace(s.Auth.Basic.Password)
+	for i := range s.Auth.APIKeys {
+		s.Auth.APIKeys[i] = strings.TrimSpace(s.Auth.APIKeys[i])
+	}
+	s.Auth.APIKeys = filterEmptyStrings(s.Auth.APIKeys)
+
 	// Validate transport type
 	switch s.Transport {
 	case "stdio", "sse":
