@@ -143,10 +143,21 @@ func (s *Service) initializeAsLeader(ctx context.Context) error {
 	return syncErr
 }
 
+// lockWaitTimeout returns the timeout for follower lock acquisition.
+// Uses half of SyncTimeout with a minimum of 5 seconds.
+func (s *Service) lockWaitTimeout() time.Duration {
+	timeout := s.settings.SyncTimeout / 2
+	if timeout < 5*time.Second {
+		timeout = 5 * time.Second
+	}
+	return timeout
+}
+
 // initializeAsFollower waits for the leader to finish, then opens indexes.
 func (s *Service) initializeAsFollower() {
-	slog.Info("Another instance is syncing, waiting for completion")
-	if err := s.lock.Lock(s.settings.SyncTimeout); err != nil {
+	lockTimeout := s.lockWaitTimeout()
+	slog.Info("Another instance is syncing, waiting for completion", "lock_wait_timeout", lockTimeout)
+	if err := s.lock.Lock(lockTimeout); err != nil {
 		slog.Warn("Timeout waiting for sync, using existing indexes", "error", err)
 	} else {
 		if err := s.lock.Unlock(); err != nil {
