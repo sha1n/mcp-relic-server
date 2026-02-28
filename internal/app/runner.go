@@ -18,7 +18,7 @@ type RunParams struct {
 	LoadSettings      func(*pflag.FlagSet) (*config.Settings, error)
 	ValidSettings     func(*config.Settings) error
 	StartSSEServer    func(*mcp.Server, *config.Settings) error
-	CreateServer      func(*config.Settings) (*mcp.Server, func(), error)
+	CreateServer      func(context.Context, *config.Settings) (*mcp.Server, func(), error)
 	CustomIOTransport mcp.Transport // Optional: for testing with custom IO
 }
 
@@ -52,7 +52,7 @@ func RunWithDeps(ctx context.Context, params RunParams, flags *pflag.FlagSet, ve
 	slog.Info("Starting MCP RELIC server", "version", version)
 	config.Log(settings)
 
-	mcpServer, cleanup, err := params.CreateServer(settings)
+	mcpServer, cleanup, err := params.CreateServer(ctx, settings)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func RunWithDeps(ctx context.Context, params RunParams, flags *pflag.FlagSet, ve
 }
 
 // CreateMCPServer creates the MCP server with registered tools
-func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
+func CreateMCPServer(ctx context.Context, settings *config.Settings) (*mcp.Server, func(), error) {
 	var gitReposSvc mcputil.GitReposToolService
 	var cleanup func()
 
@@ -91,8 +91,7 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 		}
 	}
 
-	// Initialize in background context (not tied to request context)
-	if err := svc.Initialize(context.Background()); err != nil {
+	if err := svc.Initialize(ctx); err != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("git repos initialization failed: %w", err)
 	}

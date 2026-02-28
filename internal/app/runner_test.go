@@ -52,7 +52,7 @@ func TestRunWithDeps_ErrorCases(t *testing.T) {
 					return &config.Settings{Transport: "sse"}, nil
 				},
 				ValidSettings: noopValidate,
-				CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+				CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 					return nil, nil, errors.New("create server error")
 				},
 			},
@@ -65,7 +65,7 @@ func TestRunWithDeps_ErrorCases(t *testing.T) {
 					return &config.Settings{Transport: "sse"}, nil
 				},
 				ValidSettings: noopValidate,
-				CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+				CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 					return nil, nil, nil
 				},
 				StartSSEServer: func(*mcp.Server, *config.Settings) error {
@@ -96,7 +96,7 @@ func TestRunWithDeps_Cleanup(t *testing.T) {
 			return &config.Settings{Transport: "sse"}, nil
 		},
 		ValidSettings: noopValidate,
-		CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+		CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 			return nil, func() { cleanupCalled = true }, nil
 		},
 		StartSSEServer: func(*mcp.Server, *config.Settings) error {
@@ -134,7 +134,7 @@ func TestRunWithDeps_StdioWithDefaultTransport(t *testing.T) {
 			return &config.Settings{Transport: "stdio"}, nil
 		},
 		ValidSettings: noopValidate,
-		CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+		CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 			impl := &mcp.Implementation{Name: "test", Version: "1.0"}
 			server := mcp.NewServer(impl, nil)
 			return server, nil, nil
@@ -165,7 +165,7 @@ func TestRunWithDeps_StdioWithCustomTransport(t *testing.T) {
 			return &config.Settings{Transport: "stdio"}, nil
 		},
 		ValidSettings: noopValidate,
-		CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+		CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 			impl := &mcp.Implementation{Name: "test", Version: "1.0"}
 			server := mcp.NewServer(impl, nil)
 			return server, nil, nil
@@ -198,7 +198,7 @@ func TestCreateMCPServer_WithGitRepos(t *testing.T) {
 		},
 	}
 
-	server, cleanup, err := CreateMCPServer(settings)
+	server, cleanup, err := CreateMCPServer(context.Background(), settings)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestCreateMCPServer_WithGitReposInvalidDir(t *testing.T) {
 		},
 	}
 
-	_, _, err := CreateMCPServer(settings)
+	_, _, err := CreateMCPServer(context.Background(), settings)
 	// This should fail because the base directory can't be created
 	if err == nil {
 		t.Error("Expected error for invalid base directory")
@@ -243,7 +243,7 @@ func TestCreateMCPServer_WithGitReposInitFailure(t *testing.T) {
 	}
 
 	// CreateMCPServer should fail fast when git repos initialization fails
-	_, _, err := CreateMCPServer(settings)
+	_, _, err := CreateMCPServer(context.Background(), settings)
 	if err == nil {
 		t.Fatal("Expected error for git repos init failure, got nil")
 	}
@@ -258,7 +258,7 @@ func TestRunWithDeps_SSEWithNilCleanup(t *testing.T) {
 			return &config.Settings{Transport: "sse"}, nil
 		},
 		ValidSettings: noopValidate,
-		CreateServer: func(*config.Settings) (*mcp.Server, func(), error) {
+		CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 			// Return nil cleanup (no git repos)
 			return nil, nil, nil
 		},
