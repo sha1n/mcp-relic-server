@@ -688,11 +688,14 @@ func TestMCPServer_ToolsRegistered(t *testing.T) {
 	defer closeService(t, svc)
 
 	// Create MCP server with the service
-	server := mcputil.CreateServer(mcputil.ServerConfig{
+	server, err := mcputil.CreateServer(mcputil.ServerConfig{
 		Name:        "test-server",
 		Version:     "1.0.0",
 		GitReposSvc: svc,
 	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 
 	if server == nil {
 		t.Fatal("Expected server to be created")
@@ -701,11 +704,14 @@ func TestMCPServer_ToolsRegistered(t *testing.T) {
 
 func TestMCPServer_NoToolsWhenServiceNil(t *testing.T) {
 	// Create MCP server without git repos service
-	server := mcputil.CreateServer(mcputil.ServerConfig{
+	server, err := mcputil.CreateServer(mcputil.ServerConfig{
 		Name:        "test-server",
 		Version:     "1.0.0",
 		GitReposSvc: nil,
 	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 
 	if server == nil {
 		t.Fatal("Expected server to be created")

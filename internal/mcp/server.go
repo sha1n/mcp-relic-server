@@ -19,7 +19,7 @@ type ServerConfig struct {
 }
 
 // CreateServer creates and configures the MCP server
-func CreateServer(cfg ServerConfig) *mcp.Server {
+func CreateServer(cfg ServerConfig) (*mcp.Server, error) {
 	s := mcp.NewServer(&mcp.Implementation{
 		Name:    cfg.Name,
 		Version: cfg.Version,
@@ -31,5 +31,5 @@ func CreateServer(cfg ServerConfig) *mcp.Server {
 		gitrepos.RegisterReadTool(s, cfg.GitReposSvc)
 	}
 
-	return s
+	return s, nil
 }

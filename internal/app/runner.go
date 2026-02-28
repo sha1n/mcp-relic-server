@@ -97,11 +97,15 @@ func CreateMCPServer(ctx context.Context, settings *config.Settings) (*mcp.Serve
 	}
 	gitReposSvc = svc
 
-	server := mcputil.CreateServer(mcputil.ServerConfig{
+	server, err := mcputil.CreateServer(mcputil.ServerConfig{
 		Name:        "relic-mcp",
 		Version:     "1.0.0",
 		GitReposSvc: gitReposSvc,
 	})
+	if err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("failed to create MCP server: %w", err)
+	}
 
 	return server, cleanup, nil
 }
