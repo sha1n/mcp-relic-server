@@ -242,17 +242,13 @@ func TestCreateMCPServer_WithGitReposInitFailure(t *testing.T) {
 		},
 	}
 
-	// CreateMCPServer should succeed even when git repos init has issues
-	// (it logs errors but continues)
-	server, cleanup, err := CreateMCPServer(settings)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
+	// CreateMCPServer should fail fast when git repos initialization fails
+	_, _, err := CreateMCPServer(settings)
+	if err == nil {
+		t.Fatal("Expected error for git repos init failure, got nil")
 	}
-	if server == nil {
-		t.Error("Expected server to be created even when git repos have issues")
-	}
-	if cleanup != nil {
-		cleanup()
+	if !strings.Contains(err.Error(), "git repos initialization failed") {
+		t.Errorf("Expected error containing 'git repos initialization failed', got: %v", err)
 	}
 }
 

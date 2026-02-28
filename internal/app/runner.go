@@ -93,13 +93,10 @@ func CreateMCPServer(settings *config.Settings) (*mcp.Server, func(), error) {
 
 	// Initialize in background context (not tied to request context)
 	if err := svc.Initialize(context.Background()); err != nil {
-		slog.Error("Git repos initialization failed", "error", err)
-		// Close service on initialization failure and continue without it
 		cleanup()
-		cleanup = nil
-	} else {
-		gitReposSvc = svc
+		return nil, nil, fmt.Errorf("git repos initialization failed: %w", err)
 	}
+	gitReposSvc = svc
 
 	server := mcputil.CreateServer(mcputil.ServerConfig{
 		Name:        "relic-mcp",

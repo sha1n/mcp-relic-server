@@ -104,20 +104,35 @@ func (s *Service) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
+	var syncErr error
 	if acquired {
-		s.initializeAsLeader(ctx)
+		syncErr = s.initializeAsLeader(ctx)
 	} else {
 		s.initializeAsFollower()
 	}
 
-	return s.openIndexes()
+	if err := s.openIndexes(); err != nil {
+		return err
+	}
+
+	// Fail fast if URLs are configured but no indexes are available
+	if len(s.settings.URLs) > 0 && !s.IsReady() {
+		if syncErr != nil {
+			return fmt.Errorf("git repos initialization failed: %w", syncErr)
+		}
+		return fmt.Errorf("git repos initialization failed: no indexes available")
+	}
+
+	return nil
 }
 
 // initializeAsLeader syncs repos, saves manifest, and unlocks.
-func (s *Service) initializeAsLeader(ctx context.Context) {
+// Returns the sync error (if any) for upstream visibility.
+func (s *Service) initializeAsLeader(ctx context.Context) error {
 	slog.Info("Acquired sync leader lock, starting sync")
-	if err := s.SyncAll(ctx); err != nil {
-		slog.Error("Sync failed", "error", err)
+	syncErr := s.SyncAll(ctx)
+	if syncErr != nil {
+		slog.Error("Sync failed", "error", syncErr)
 	}
 	if err := s.saveManifest(); err != nil {
 		slog.Error("Failed to save manifest", "error", err)
@@ -125,6 +140,7 @@ func (s *Service) initializeAsLeader(ctx context.Context) {
 	if err := s.lock.Unlock(); err != nil {
 		slog.Error("Failed to unlock", "error", err)
 	}
+	return syncErr
 }
 
 // initializeAsFollower waits for the leader to finish, then opens indexes.
