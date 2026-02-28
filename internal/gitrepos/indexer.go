@@ -136,26 +136,29 @@ func (i *Indexer) IndexExists(repoID string) bool {
 }
 
 // CreateAlias creates an IndexAlias combining multiple indexes.
-func (i *Indexer) CreateAlias(repoIDs []string) (bleve.IndexAlias, error) {
-	indexes := make([]bleve.Index, 0, len(repoIDs))
+func (i *Indexer) CreateAlias(repoIDs []string) (_ bleve.IndexAlias, err error) {
+	var opened []bleve.Index
+	defer func() {
+		if err != nil {
+			for _, idx := range opened {
+				idx.Close()
+			}
+		}
+	}()
 
 	for _, repoID := range repoIDs {
-		index, err := i.OpenForRead(repoID)
-		if err != nil {
-			// Close already opened indexes
-			for _, idx := range indexes {
-				_ = idx.Close()
-			}
-			return nil, fmt.Errorf("failed to open index for %s: %w", repoID, err)
+		index, openErr := i.OpenForRead(repoID)
+		if openErr != nil {
+			return nil, fmt.Errorf("failed to open index for %s: %w", repoID, openErr)
 		}
-		indexes = append(indexes, index)
+		opened = append(opened, index)
 	}
 
-	if len(indexes) == 0 {
+	if len(opened) == 0 {
 		return nil, fmt.Errorf("no indexes to combine")
 	}
 
-	return bleve.NewIndexAlias(indexes...), nil
+	return bleve.NewIndexAlias(opened...), nil
 }
 
 // FullIndex performs a full index of a repository.
