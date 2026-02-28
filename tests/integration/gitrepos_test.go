@@ -719,6 +719,435 @@ func TestMCPServer_NoToolsWhenServiceNil(t *testing.T) {
 }
 
 // ========================================
+// Concurrent Search and Load Tests
+// ========================================
+
+func TestSearchTool_ConcurrentSearches(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go":       "package main\n\nfunc main() {\n\tprintln(\"hello world\")\n}",
+		"lib/utils.go":  "package lib\n\nfunc Helper() string {\n\treturn \"helper\"\n}",
+		"lib/config.go": "package lib\n\nfunc LoadConfig() error {\n\treturn nil\n}",
+	}
+
+	svc := setupTestService(t, dir, files)
+	defer closeService(t, svc)
+
+	handler := gitrepos.NewSearchHandler(svc)
+	ctx := context.Background()
+
+	const goroutines = 10
+	const searchesPerGoroutine = 5
+	queries := []string{"main", "hello", "Helper", "config", "package"}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, goroutines*searchesPerGoroutine)
+
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < searchesPerGoroutine; i++ {
+				q := queries[(id+i)%len(queries)]
+				result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+					Query: q,
+				})
+				if err != nil {
+					errs <- fmt.Errorf("goroutine %d search %d: Handle error: %w", id, i, err)
+					continue
+				}
+				if result.IsError {
+					errs <- fmt.Errorf("goroutine %d search %d: result error: %s", id, i, gitrepos.ExtractTextContent(result))
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+func TestSearchTool_ConcurrentSearchAndRead(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go":      "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}",
+		"lib/utils.go": "package lib\n\nfunc Helper() string {\n\treturn \"helper\"\n}",
+	}
+
+	svc := setupTestService(t, dir, files)
+	defer closeService(t, svc)
+
+	searchHandler := gitrepos.NewSearchHandler(svc)
+	readHandler := gitrepos.NewReadHandler(svc)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 20)
+
+	// Launch search goroutines
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 3; j++ {
+				result, _, err := searchHandler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+					Query: "main",
+				})
+				if err != nil {
+					errs <- fmt.Errorf("search goroutine %d iter %d: %w", id, j, err)
+					continue
+				}
+				if result.IsError {
+					errs <- fmt.Errorf("search goroutine %d iter %d: error result: %s", id, j, gitrepos.ExtractTextContent(result))
+				}
+			}
+		}(i)
+	}
+
+	// Launch read goroutines
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 3; j++ {
+				result, _, err := readHandler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.ReadArgument{
+					Repository: "github.com/test/repo",
+					Path:       "main.go",
+				})
+				if err != nil {
+					errs <- fmt.Errorf("read goroutine %d iter %d: %w", id, j, err)
+					continue
+				}
+				if result.IsError {
+					errs <- fmt.Errorf("read goroutine %d iter %d: error result: %s", id, j, gitrepos.ExtractTextContent(result))
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+func TestSearchTool_LargeResultSet(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create many files with overlapping content
+	files := make(map[string]string)
+	for i := 0; i < 50; i++ {
+		filename := fmt.Sprintf("file%d.go", i)
+		files[filename] = fmt.Sprintf("package main\n\n// common keyword searchable\nfunc handler%d() {}\n", i)
+	}
+
+	settings := &config.GitReposSettings{
+		URLs:         []string{"git@github.com:test/repo.git"},
+		BaseDir:      dir,
+		SyncInterval: 15 * time.Minute,
+		SyncTimeout:  5 * time.Second,
+		MaxFileSize:  256 * 1024,
+		MaxResults:   10, // Limit to 10 results
+	}
+
+	svc, err := gitrepos.NewService(settings)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	defer closeService(t, svc)
+
+	mock := gitrepos.NewMockExecutor()
+	mock.AddResponse("git clone", []byte{}, nil)
+	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
+	setMockGit(svc, mock)
+
+	repoDir := filepath.Join(dir, "repos", "github.com_test_repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+	for relPath, content := range files {
+		if err := os.WriteFile(filepath.Join(repoDir, relPath), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+	}
+
+	ctx := context.Background()
+	if err := svc.Initialize(ctx); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	handler := gitrepos.NewSearchHandler(svc)
+	result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+		Query: "common keyword searchable",
+	})
+	if err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Expected success, got error: %s", gitrepos.ExtractTextContent(result))
+	}
+
+	content := gitrepos.ExtractTextContent(result)
+	// Pagination footer should indicate more results
+	if !strings.Contains(content, "more results") {
+		t.Errorf("Expected pagination footer with 'more results', got: %s", content)
+	}
+}
+
+func TestSearchTool_LargeResultSet_MaxResultsOne(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"a.go": "package main\n\nfunc alpha() {}",
+		"b.go": "package main\n\nfunc beta() {}",
+		"c.go": "package main\n\nfunc gamma() {}",
+	}
+
+	settings := &config.GitReposSettings{
+		URLs:         []string{"git@github.com:test/repo.git"},
+		BaseDir:      dir,
+		SyncInterval: 15 * time.Minute,
+		SyncTimeout:  5 * time.Second,
+		MaxFileSize:  256 * 1024,
+		MaxResults:   1,
+	}
+
+	svc, err := gitrepos.NewService(settings)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	defer closeService(t, svc)
+
+	mock := gitrepos.NewMockExecutor()
+	mock.AddResponse("git clone", []byte{}, nil)
+	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
+	setMockGit(svc, mock)
+
+	repoDir := filepath.Join(dir, "repos", "github.com_test_repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+	for relPath, content := range files {
+		if err := os.WriteFile(filepath.Join(repoDir, relPath), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+	}
+
+	ctx := context.Background()
+	if err := svc.Initialize(ctx); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	handler := gitrepos.NewSearchHandler(svc)
+	result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+		Query: "package main",
+	})
+	if err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	content := gitrepos.ExtractTextContent(result)
+	// Should only have 1 result header (starts with "**1.")
+	if !strings.Contains(content, "**1.") {
+		t.Error("Expected at least 1 result")
+	}
+	if strings.Contains(content, "**2.") {
+		t.Error("Expected only 1 result with MaxResults=1")
+	}
+	// Should have pagination footer
+	if !strings.Contains(content, "more results") {
+		t.Errorf("Expected pagination footer, got: %s", content)
+	}
+}
+
+func TestSearchTool_SearchAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go": "package main\nfunc main() {}",
+	}
+
+	svc := setupTestService(t, dir, files)
+
+	// Close service first
+	if err := svc.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	handler := gitrepos.NewSearchHandler(svc)
+	ctx := context.Background()
+
+	result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.SearchArgument{
+		Query: "main",
+	})
+	if err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("Expected error when searching after close")
+	}
+}
+
+func TestReadTool_ReadAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go": "package main\nfunc main() {}",
+	}
+
+	svc := setupTestService(t, dir, files)
+
+	// Close service first
+	if err := svc.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	handler := gitrepos.NewReadHandler(svc)
+	ctx := context.Background()
+
+	// Read should still work (reads from filesystem, not index)
+	// but the service's IsReady() returns false
+	result, _, err := handler.Handle(ctx, &mcp.CallToolRequest{}, gitrepos.ReadArgument{
+		Repository: "github.com/test/repo",
+		Path:       "main.go",
+	})
+	if err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("Expected error when reading after close")
+	}
+}
+
+func TestIndex_CorruptedIndex_OpenForRead(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go": "package main\nfunc main() {}",
+	}
+
+	svc := setupTestService(t, dir, files)
+	closeService(t, svc)
+
+	// Corrupt the index by writing garbage to a file in the index directory
+	indexDir := filepath.Join(dir, "indexes", "github.com_test_repo.bleve")
+	entries, err := os.ReadDir(indexDir)
+	if err != nil {
+		t.Fatalf("Failed to read index dir: %v", err)
+	}
+
+	// Find and corrupt a file in the index
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			corruptPath := filepath.Join(indexDir, entry.Name())
+			if err := os.WriteFile(corruptPath, []byte("corrupted data"), 0644); err != nil {
+				t.Fatalf("Failed to corrupt index file: %v", err)
+			}
+			break
+		}
+	}
+
+	// Try to create a new service and open the corrupted index
+	settings := &config.GitReposSettings{
+		URLs:         []string{"git@github.com:test/repo.git"},
+		BaseDir:      dir,
+		SyncInterval: 15 * time.Minute,
+		SyncTimeout:  5 * time.Second,
+		MaxFileSize:  256 * 1024,
+		MaxResults:   20,
+	}
+
+	svc2, err := gitrepos.NewService(settings)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	defer closeService(t, svc2)
+
+	// The service should handle corrupted index gracefully
+	// (either error during init or not ready)
+	mock := gitrepos.NewMockExecutor()
+	mock.AddResponse("git clone", []byte{}, nil)
+	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
+	setMockGit(svc2, mock)
+
+	repoDir := filepath.Join(dir, "repos", "github.com_test_repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	// Initialize may fail or succeed (reindexing overwrites corrupt index)
+	ctx := context.Background()
+	_ = svc2.Initialize(ctx)
+	// The key assertion is no panic
+}
+
+func TestIndex_MissingIndexDirectory(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.go": "package main\nfunc main() {}",
+	}
+
+	svc := setupTestService(t, dir, files)
+	closeService(t, svc)
+
+	// Delete the index directory and manifest to simulate a clean slate
+	indexDir := filepath.Join(dir, "indexes", "github.com_test_repo.bleve")
+	if err := os.RemoveAll(indexDir); err != nil {
+		t.Fatalf("Failed to remove index dir: %v", err)
+	}
+	manifestPath := filepath.Join(dir, "manifest.json")
+	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("Failed to remove manifest: %v", err)
+	}
+
+	// Create a new service - should handle missing index gracefully
+	settings := &config.GitReposSettings{
+		URLs:         []string{"git@github.com:test/repo.git"},
+		BaseDir:      dir,
+		SyncInterval: 15 * time.Minute,
+		SyncTimeout:  5 * time.Second,
+		MaxFileSize:  256 * 1024,
+		MaxResults:   20,
+	}
+
+	svc2, err := gitrepos.NewService(settings)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	defer closeService(t, svc2)
+
+	mock := gitrepos.NewMockExecutor()
+	mock.AddResponse("git clone", []byte{}, nil)
+	mock.AddResponse("git rev-parse", []byte("abc123\n"), nil)
+	setMockGit(svc2, mock)
+
+	repoDir := filepath.Join(dir, "repos", "github.com_test_repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "main.go"), []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	// Initialize should succeed (will re-index from scratch)
+	ctx := context.Background()
+	if err := svc2.Initialize(ctx); err != nil {
+		t.Fatalf("Initialize failed after index deletion: %v", err)
+	}
+
+	if !svc2.IsReady() {
+		t.Error("Expected service to be ready after re-indexing")
+	}
+}
+
+// ========================================
 // Helper Functions
 // ========================================
 
