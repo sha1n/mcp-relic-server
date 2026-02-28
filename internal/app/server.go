@@ -1,21 +1,34 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sha1n/mcp-relic-server/internal/auth"
 	"github.com/sha1n/mcp-relic-server/internal/config"
 )
 
-// StartSSEServer starts the SSE server with authentication
-func StartSSEServer(s *mcp.Server, settings *config.Settings) error {
+const shutdownTimeout = 5 * time.Second
+
+// StartSSEServer starts the SSE server with graceful shutdown on context cancellation.
+func StartSSEServer(ctx context.Context, s *mcp.Server, settings *config.Settings) error {
 	srv, err := NewSSEServer(s, settings)
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("HTTP server shutdown error", "error", err)
+		}
+	}()
 
 	slog.Info("Server listening (HTTP)", "addr", srv.Addr, "auth_type", settings.Auth.Type)
 	return srv.ListenAndServe()

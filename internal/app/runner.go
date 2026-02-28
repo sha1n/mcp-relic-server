@@ -17,7 +17,7 @@ import (
 type RunParams struct {
 	LoadSettings      func(*pflag.FlagSet) (*config.Settings, error)
 	ValidSettings     func(*config.Settings) error
-	StartSSEServer    func(*mcp.Server, *config.Settings) error
+	StartSSEServer    func(context.Context, *mcp.Server, *config.Settings) error
 	CreateServer      func(context.Context, *config.Settings) (*mcp.Server, func(), error)
 	CustomIOTransport mcp.Transport // Optional: for testing with custom IO
 }
@@ -70,7 +70,7 @@ func RunWithDeps(ctx context.Context, params RunParams, flags *pflag.FlagSet, ve
 		return mcpServer.Run(ctx, transport)
 	} else {
 		slog.Info("Starting SSE server", "host", settings.Host, "port", settings.Port)
-		return params.StartSSEServer(mcpServer, settings)
+		return params.StartSSEServer(ctx, mcpServer, settings)
 	}
 }
 

@@ -68,7 +68,7 @@ func TestRunWithDeps_ErrorCases(t *testing.T) {
 				CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 					return nil, nil, nil
 				},
-				StartSSEServer: func(*mcp.Server, *config.Settings) error {
+				StartSSEServer: func(context.Context, *mcp.Server, *config.Settings) error {
 					return errors.New("sse start error")
 				},
 			},
@@ -99,7 +99,7 @@ func TestRunWithDeps_Cleanup(t *testing.T) {
 		CreateServer: func(context.Context, *config.Settings) (*mcp.Server, func(), error) {
 			return nil, func() { cleanupCalled = true }, nil
 		},
-		StartSSEServer: func(*mcp.Server, *config.Settings) error {
+		StartSSEServer: func(context.Context, *mcp.Server, *config.Settings) error {
 			return errors.New("intentional error to trigger cleanup")
 		},
 	}
@@ -262,7 +262,7 @@ func TestRunWithDeps_SSEWithNilCleanup(t *testing.T) {
 			// Return nil cleanup (no git repos)
 			return nil, nil, nil
 		},
-		StartSSEServer: func(*mcp.Server, *config.Settings) error {
+		StartSSEServer: func(context.Context, *mcp.Server, *config.Settings) error {
 			return errors.New("intentional error")
 		},
 	}
