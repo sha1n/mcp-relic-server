@@ -43,9 +43,9 @@ func (e *DefaultExecutor) Run(ctx context.Context, dir string, name string, args
 }
 
 const (
-	defaultRetryCount  = 3
-	retryBaseDelay     = 1 * time.Second
-	retryMaxDelay      = 8 * time.Second
+	defaultRetryCount = 3
+	retryBaseDelay    = 1 * time.Second
+	retryMaxDelay     = 8 * time.Second
 )
 
 // GitClient executes git commands.
