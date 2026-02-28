@@ -141,7 +141,7 @@ func (i *Indexer) CreateAlias(repoIDs []string) (_ bleve.IndexAlias, err error) 
 	defer func() {
 		if err != nil {
 			for _, idx := range opened {
-				idx.Close()
+				_ = idx.Close()
 			}
 		}
 	}()

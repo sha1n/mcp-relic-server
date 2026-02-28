@@ -63,7 +63,7 @@ test: install go-test
 .PHONY: coverage
 coverage: install
 	@echo "  >  Running tests with coverage (bypassing cache)..."
-	go test $(MODFLAGS) -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
+	go test -race $(MODFLAGS) -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
 
 ## coverage-html: Runs tests and opens the coverage report in a browser
@@ -148,7 +148,7 @@ go-get:
 .PHONY: go-test
 go-test:
 	@echo "  >  Running tests..."
-	go test $(MODFLAGS) ./...
+	go test -race $(MODFLAGS) ./...
 
 .PHONY: go-clean
 go-clean:
