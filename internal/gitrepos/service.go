@@ -337,7 +337,16 @@ func (s *Service) openIndexes() error {
 
 	s.alias = alias
 	s.ready = true
-	slog.Info("Indexes ready", "count", len(indexedRepos))
+
+	// Log index sizes for observability
+	var totalSize int64
+	for _, repoID := range indexedRepos {
+		if size, err := s.indexer.GetIndexSize(repoID); err == nil {
+			totalSize += size
+			slog.Info("Index size", "repo_id", repoID, "size_bytes", size)
+		}
+	}
+	slog.Info("Indexes ready", "count", len(indexedRepos), "total_size_bytes", totalSize)
 	return nil
 }
 

@@ -37,6 +37,7 @@ type IndexOperations interface {
 	DeleteIndex(repoID string) error
 	IndexExists(repoID string) bool
 	CreateAlias(repoIDs []string) (bleve.IndexAlias, error)
+	GetIndexSize(repoID string) (int64, error)
 }
 
 // ManifestOperations abstracts manifest operations for testing.

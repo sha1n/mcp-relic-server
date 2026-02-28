@@ -360,6 +360,25 @@ func (i *Indexer) DeleteIndex(repoID string) error {
 	return os.RemoveAll(indexPath)
 }
 
+// GetIndexSize returns the total size in bytes of an index on disk.
+func (i *Indexer) GetIndexSize(repoID string) (int64, error) {
+	indexPath := i.indexPath(repoID)
+	var size int64
+	err := filepath.Walk(indexPath, func(_ string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to calculate index size: %w", err)
+	}
+	return size, nil
+}
+
 // GetDocumentCount returns the number of documents in an index.
 func (i *Indexer) GetDocumentCount(repoID string) (count uint64, err error) {
 	index, err := i.OpenForRead(repoID)

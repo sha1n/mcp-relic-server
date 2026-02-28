@@ -79,6 +79,7 @@ func (m *mockIndexOps) IndexExists(repoID string) bool {
 func (m *mockIndexOps) CreateAlias(_ []string) (bleve.IndexAlias, error) {
 	return m.alias, m.aliasErr
 }
+func (m *mockIndexOps) GetIndexSize(_ string) (int64, error) { return 0, nil }
 
 // mockManifestOps implements ManifestOperations for service tests.
 type mockManifestOps struct {
