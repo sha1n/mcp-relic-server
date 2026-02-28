@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,36 +81,52 @@ func LoadSettingsWithFlags(flags *pflag.FlagSet) (*Settings, error) {
 	v.AutomaticEnv()
 
 	// Bind specific env vars for nested config
-	_ = v.BindEnv("auth.type", "RELIC_MCP_AUTH_TYPE")
-	_ = v.BindEnv("auth.basic.username", "RELIC_MCP_AUTH_BASIC_USERNAME")
-	_ = v.BindEnv("auth.basic.password", "RELIC_MCP_AUTH_BASIC_PASSWORD")
-	_ = v.BindEnv("auth.api_keys", "RELIC_MCP_AUTH_API_KEYS")
-
-	// Git repos env var bindings
-	_ = v.BindEnv("git_repos.urls", "RELIC_MCP_GIT_REPOS_URLS")
-	_ = v.BindEnv("git_repos.base_dir", "RELIC_MCP_GIT_REPOS_BASE_DIR")
-	_ = v.BindEnv("git_repos.sync_interval", "RELIC_MCP_GIT_REPOS_SYNC_INTERVAL")
-	_ = v.BindEnv("git_repos.sync_timeout", "RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT")
-	_ = v.BindEnv("git_repos.max_file_size", "RELIC_MCP_GIT_REPOS_MAX_FILE_SIZE")
-	_ = v.BindEnv("git_repos.max_results", "RELIC_MCP_GIT_REPOS_MAX_RESULTS")
+	for _, binding := range []struct {
+		key    string
+		envVar string
+	}{
+		{"auth.type", "RELIC_MCP_AUTH_TYPE"},
+		{"auth.basic.username", "RELIC_MCP_AUTH_BASIC_USERNAME"},
+		{"auth.basic.password", "RELIC_MCP_AUTH_BASIC_PASSWORD"},
+		{"auth.api_keys", "RELIC_MCP_AUTH_API_KEYS"},
+		{"git_repos.urls", "RELIC_MCP_GIT_REPOS_URLS"},
+		{"git_repos.base_dir", "RELIC_MCP_GIT_REPOS_BASE_DIR"},
+		{"git_repos.sync_interval", "RELIC_MCP_GIT_REPOS_SYNC_INTERVAL"},
+		{"git_repos.sync_timeout", "RELIC_MCP_GIT_REPOS_SYNC_TIMEOUT"},
+		{"git_repos.max_file_size", "RELIC_MCP_GIT_REPOS_MAX_FILE_SIZE"},
+		{"git_repos.max_results", "RELIC_MCP_GIT_REPOS_MAX_RESULTS"},
+	} {
+		if err := v.BindEnv(binding.key, binding.envVar); err != nil {
+			return nil, fmt.Errorf("failed to bind env var %s: %w", binding.envVar, err)
+		}
+	}
 
 	// Bind CLI flags if provided (highest priority)
 	if flags != nil {
-		_ = v.BindPFlag("transport", flags.Lookup("transport"))
-		_ = v.BindPFlag("host", flags.Lookup("host"))
-		_ = v.BindPFlag("port", flags.Lookup("port"))
-		_ = v.BindPFlag("auth.type", flags.Lookup("auth-type"))
-		_ = v.BindPFlag("auth.basic.username", flags.Lookup("auth-basic-username"))
-		_ = v.BindPFlag("auth.basic.password", flags.Lookup("auth-basic-password"))
-		_ = v.BindPFlag("auth.api_keys", flags.Lookup("auth-api-keys"))
-
-		// Git repos CLI flags
-		_ = v.BindPFlag("git_repos.urls", flags.Lookup("git-repos-urls"))
-		_ = v.BindPFlag("git_repos.base_dir", flags.Lookup("git-repos-base-dir"))
-		_ = v.BindPFlag("git_repos.sync_interval", flags.Lookup("git-repos-sync-interval"))
-		_ = v.BindPFlag("git_repos.sync_timeout", flags.Lookup("git-repos-sync-timeout"))
-		_ = v.BindPFlag("git_repos.max_file_size", flags.Lookup("git-repos-max-file-size"))
-		_ = v.BindPFlag("git_repos.max_results", flags.Lookup("git-repos-max-results"))
+		for _, binding := range []struct {
+			key  string
+			flag string
+		}{
+			{"transport", "transport"},
+			{"host", "host"},
+			{"port", "port"},
+			{"auth.type", "auth-type"},
+			{"auth.basic.username", "auth-basic-username"},
+			{"auth.basic.password", "auth-basic-password"},
+			{"auth.api_keys", "auth-api-keys"},
+			{"git_repos.urls", "git-repos-urls"},
+			{"git_repos.base_dir", "git-repos-base-dir"},
+			{"git_repos.sync_interval", "git-repos-sync-interval"},
+			{"git_repos.sync_timeout", "git-repos-sync-timeout"},
+			{"git_repos.max_file_size", "git-repos-max-file-size"},
+			{"git_repos.max_results", "git-repos-max-results"},
+		} {
+			if f := flags.Lookup(binding.flag); f != nil {
+				if err := v.BindPFlag(binding.key, f); err != nil {
+					return nil, fmt.Errorf("failed to bind flag %s: %w", binding.flag, err)
+				}
+			}
+		}
 	}
 
 	// Helper to look for .env file
