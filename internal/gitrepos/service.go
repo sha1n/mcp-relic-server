@@ -104,20 +104,35 @@ func (s *Service) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
+	var syncErr error
 	if acquired {
-		s.initializeAsLeader(ctx)
+		syncErr = s.initializeAsLeader(ctx)
 	} else {
 		s.initializeAsFollower()
 	}
 
-	return s.openIndexes()
+	if err := s.openIndexes(); err != nil {
+		return err
+	}
+
+	// Fail fast if URLs are configured but no indexes are available
+	if len(s.settings.URLs) > 0 && !s.IsReady() {
+		if syncErr != nil {
+			return fmt.Errorf("git repos initialization failed: %w", syncErr)
+		}
+		return fmt.Errorf("git repos initialization failed: no indexes available")
+	}
+
+	return nil
 }
 
 // initializeAsLeader syncs repos, saves manifest, and unlocks.
-func (s *Service) initializeAsLeader(ctx context.Context) {
+// Returns the sync error (if any) for upstream visibility.
+func (s *Service) initializeAsLeader(ctx context.Context) error {
 	slog.Info("Acquired sync leader lock, starting sync")
-	if err := s.SyncAll(ctx); err != nil {
-		slog.Error("Sync failed", "error", err)
+	syncErr := s.SyncAll(ctx)
+	if syncErr != nil {
+		slog.Error("Sync failed", "error", syncErr)
 	}
 	if err := s.saveManifest(); err != nil {
 		slog.Error("Failed to save manifest", "error", err)
@@ -125,12 +140,24 @@ func (s *Service) initializeAsLeader(ctx context.Context) {
 	if err := s.lock.Unlock(); err != nil {
 		slog.Error("Failed to unlock", "error", err)
 	}
+	return syncErr
+}
+
+// lockWaitTimeout returns the timeout for follower lock acquisition.
+// Uses half of SyncTimeout with a minimum of 5 seconds.
+func (s *Service) lockWaitTimeout() time.Duration {
+	timeout := s.settings.SyncTimeout / 2
+	if timeout < 5*time.Second {
+		timeout = 5 * time.Second
+	}
+	return timeout
 }
 
 // initializeAsFollower waits for the leader to finish, then opens indexes.
 func (s *Service) initializeAsFollower() {
-	slog.Info("Another instance is syncing, waiting for completion")
-	if err := s.lock.Lock(s.settings.SyncTimeout); err != nil {
+	lockTimeout := s.lockWaitTimeout()
+	slog.Info("Another instance is syncing, waiting for completion", "lock_wait_timeout", lockTimeout)
+	if err := s.lock.Lock(lockTimeout); err != nil {
 		slog.Warn("Timeout waiting for sync, using existing indexes", "error", err)
 	} else {
 		if err := s.lock.Unlock(); err != nil {
@@ -252,7 +279,7 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 						state.LastCommit = currentCommit
 						state.LastIndexed = currentCommit
 						state.LastPull = time.Now()
-						s.manifest.SetRepoState(repoID, *state)
+						s.manifest.SetRepoState(repoID, state)
 						slog.Info("Incremental index complete", "repo_id", repoID, "indexed", indexed)
 						return nil
 					}
@@ -273,7 +300,7 @@ func (s *Service) syncRepo(ctx context.Context, repoID, url string) error {
 		state.LastIndexed = currentCommit
 		state.FileCount = fileCount
 		state.LastPull = time.Now()
-		s.manifest.SetRepoState(repoID, *state)
+		s.manifest.SetRepoState(repoID, state)
 		slog.Info("Full index complete", "repo_id", repoID, "file_count", fileCount)
 	} else {
 		slog.Info("Repository already up to date", "repo_id", repoID)
@@ -310,7 +337,16 @@ func (s *Service) openIndexes() error {
 
 	s.alias = alias
 	s.ready = true
-	slog.Info("Indexes ready", "count", len(indexedRepos))
+
+	// Log index sizes for observability
+	var totalSize int64
+	for _, repoID := range indexedRepos {
+		if size, err := s.indexer.GetIndexSize(repoID); err == nil {
+			totalSize += size
+			slog.Info("Index size", "repo_id", repoID, "size_bytes", size)
+		}
+	}
+	slog.Info("Indexes ready", "count", len(indexedRepos), "total_size_bytes", totalSize)
 	return nil
 }
 

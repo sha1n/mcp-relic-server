@@ -341,7 +341,7 @@ func TestService_Initialize_LeaderSyncSuccess(t *testing.T) {
 	// so CreateAlias will return an error. We're testing the leader path executes.
 }
 
-func TestService_Initialize_LeaderSyncFails_StillOpensIndexes(t *testing.T) {
+func TestService_Initialize_LeaderSyncFails_ReturnsError(t *testing.T) {
 	svc := NewServiceWithDeps(
 		&config.GitReposSettings{
 			BaseDir:     t.TempDir(),
@@ -356,10 +356,13 @@ func TestService_Initialize_LeaderSyncFails_StillOpensIndexes(t *testing.T) {
 		},
 	)
 
-	// Should not return error — sync errors are logged, not returned
+	// Should return error when sync fails and no indexes are available
 	err := svc.Initialize(context.Background())
-	if err != nil {
-		t.Fatalf("Initialize should not fail even when sync fails: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when sync fails and no indexes are available")
+	}
+	if !strings.Contains(err.Error(), "git repos initialization failed") {
+		t.Errorf("Expected error containing 'git repos initialization failed', got: %v", err)
 	}
 }
 
@@ -493,9 +496,13 @@ func TestService_OpenIndexes_NoIndexes(t *testing.T) {
 		},
 	)
 
+	// Should return error when URLs are configured but no indexes are available
 	err := svc.Initialize(context.Background())
-	if err != nil {
-		t.Fatalf("Initialize failed: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when no indexes are available")
+	}
+	if !strings.Contains(err.Error(), "no indexes available") {
+		t.Errorf("Expected error containing 'no indexes available', got: %v", err)
 	}
 	if svc.IsReady() {
 		t.Error("Service should not be ready when no indexes exist")
@@ -1076,7 +1083,7 @@ func TestService_IncrementalIndex_ThresholdExceeded(t *testing.T) {
 
 	var diffLines strings.Builder
 	for i := 0; i < 101; i++ {
-		diffLines.WriteString(fmt.Sprintf("file%d.go\n", i))
+		fmt.Fprintf(&diffLines, "file%d.go\n", i)
 	}
 
 	mock2 := NewMockExecutor()
@@ -1144,7 +1151,7 @@ func TestService_IncrementalIndex_ExactBoundary(t *testing.T) {
 
 	var diffLines strings.Builder
 	for i := 0; i < 100; i++ {
-		diffLines.WriteString(fmt.Sprintf("file%d.go\n", i))
+		fmt.Fprintf(&diffLines, "file%d.go\n", i)
 	}
 
 	mock2 := NewMockExecutor()

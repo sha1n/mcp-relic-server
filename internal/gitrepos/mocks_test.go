@@ -79,6 +79,7 @@ func (m *mockIndexOps) IndexExists(repoID string) bool {
 func (m *mockIndexOps) CreateAlias(_ []string) (bleve.IndexAlias, error) {
 	return m.alias, m.aliasErr
 }
+func (m *mockIndexOps) GetIndexSize(_ string) (int64, error) { return 0, nil }
 
 // mockManifestOps implements ManifestOperations for service tests.
 type mockManifestOps struct {
@@ -91,13 +92,8 @@ func newMockManifestOps() *mockManifestOps {
 	return &mockManifestOps{repos: make(map[string]RepoState)}
 }
 
-func (m *mockManifestOps) GetRepoState(repoID string) *RepoState {
-	state, ok := m.repos[repoID]
-	if !ok {
-		state = RepoState{}
-		m.repos[repoID] = state
-	}
-	return &state
+func (m *mockManifestOps) GetRepoState(repoID string) RepoState {
+	return m.repos[repoID]
 }
 func (m *mockManifestOps) SetRepoState(repoID string, state RepoState) { m.repos[repoID] = state }
 func (m *mockManifestOps) HasRepo(repoID string) bool {

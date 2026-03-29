@@ -31,7 +31,10 @@ func TestCreateServer(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
@@ -40,7 +43,10 @@ func TestCreateServer(t *testing.T) {
 func TestCreateServer_EmptyConfig(t *testing.T) {
 	cfg := ServerConfig{}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created even with empty config")
 	}
@@ -52,7 +58,10 @@ func TestCreateServer_WithVersion(t *testing.T) {
 		Version: "2.0.0",
 	}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
@@ -65,7 +74,10 @@ func TestCreateServer_WithoutGitReposService(t *testing.T) {
 		GitReposSvc: nil,
 	}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created without git repos service")
 	}
@@ -83,7 +95,10 @@ func TestCreateServer_WithGitReposService(t *testing.T) {
 		},
 	}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created with git repos service")
 	}
@@ -100,7 +115,10 @@ func TestCreateServer_ToolsRegistered(t *testing.T) {
 		},
 	}
 
-	server := CreateServer(cfg)
+	server, err := CreateServer(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}

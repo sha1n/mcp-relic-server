@@ -161,8 +161,8 @@ func (h *ReadHandler) Handle(ctx context.Context, req *mcp.CallToolRequest, args
 	// Format result with language hint
 	lang := extensionToLanguage(GetFileExtension(args.Path))
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("**%s** `%s`\n\n", args.Repository, args.Path))
-	sb.WriteString(fmt.Sprintf("```%s\n", lang))
+	fmt.Fprintf(&sb, "**%s** `%s`\n\n", args.Repository, args.Path)
+	fmt.Fprintf(&sb, "```%s\n", lang)
 	sb.WriteString(string(content))
 	if !strings.HasSuffix(string(content), "\n") {
 		sb.WriteString("\n")

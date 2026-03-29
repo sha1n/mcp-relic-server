@@ -136,26 +136,29 @@ func (i *Indexer) IndexExists(repoID string) bool {
 }
 
 // CreateAlias creates an IndexAlias combining multiple indexes.
-func (i *Indexer) CreateAlias(repoIDs []string) (bleve.IndexAlias, error) {
-	indexes := make([]bleve.Index, 0, len(repoIDs))
-
-	for _, repoID := range repoIDs {
-		index, err := i.OpenForRead(repoID)
+func (i *Indexer) CreateAlias(repoIDs []string) (_ bleve.IndexAlias, err error) {
+	var opened []bleve.Index
+	defer func() {
 		if err != nil {
-			// Close already opened indexes
-			for _, idx := range indexes {
+			for _, idx := range opened {
 				_ = idx.Close()
 			}
-			return nil, fmt.Errorf("failed to open index for %s: %w", repoID, err)
 		}
-		indexes = append(indexes, index)
+	}()
+
+	for _, repoID := range repoIDs {
+		index, openErr := i.OpenForRead(repoID)
+		if openErr != nil {
+			return nil, fmt.Errorf("failed to open index for %s: %w", repoID, openErr)
+		}
+		opened = append(opened, index)
 	}
 
-	if len(indexes) == 0 {
+	if len(opened) == 0 {
 		return nil, fmt.Errorf("no indexes to combine")
 	}
 
-	return bleve.NewIndexAlias(indexes...), nil
+	return bleve.NewIndexAlias(opened...), nil
 }
 
 // FullIndex performs a full index of a repository.
@@ -355,6 +358,25 @@ func (i *Indexer) IncrementalIndex(repoID, repoDir string, changedFiles []string
 func (i *Indexer) DeleteIndex(repoID string) error {
 	indexPath := i.indexPath(repoID)
 	return os.RemoveAll(indexPath)
+}
+
+// GetIndexSize returns the total size in bytes of an index on disk.
+func (i *Indexer) GetIndexSize(repoID string) (int64, error) {
+	indexPath := i.indexPath(repoID)
+	var size int64
+	err := filepath.Walk(indexPath, func(_ string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to calculate index size: %w", err)
+	}
+	return size, nil
 }
 
 // GetDocumentCount returns the number of documents in an index.

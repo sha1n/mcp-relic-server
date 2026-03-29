@@ -100,16 +100,12 @@ func (m *Manifest) Save(path string) error {
 	return nil
 }
 
-// GetRepoState returns the state for a repository, creating it if it doesn't exist.
-func (m *Manifest) GetRepoState(repoID string) *RepoState {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	state, ok := m.Repos[repoID]
-	if !ok {
-		state = RepoState{}
-		m.Repos[repoID] = state
-	}
-	return &state
+// GetRepoState returns a copy of the state for a repository.
+// Returns a zero-value RepoState if the repository is not in the manifest.
+func (m *Manifest) GetRepoState(repoID string) RepoState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.Repos[repoID]
 }
 
 // SetRepoState updates the state for a repository.

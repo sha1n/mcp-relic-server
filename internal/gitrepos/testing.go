@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // MockExecutor records commands and returns configured responses.
-// This is exported for use in integration tests.
+// This is exported for use in integration tests. It is safe for concurrent use.
 type MockExecutor struct {
+	mu       sync.Mutex
 	commands []MockCommand
 	calls    []ExecutorCall
 }
@@ -40,6 +42,8 @@ func NewMockExecutor() *MockExecutor {
 
 // AddResponse adds a mock response for commands matching the given prefix.
 func (m *MockExecutor) AddResponse(namePrefix string, output []byte, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.commands = append(m.commands, MockCommand{
 		NamePrefix: namePrefix,
 		Output:     output,
@@ -49,6 +53,9 @@ func (m *MockExecutor) AddResponse(namePrefix string, output []byte, err error) 
 
 // Run executes a command and returns the configured mock response.
 func (m *MockExecutor) Run(_ context.Context, dir string, name string, args ...string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	call := ExecutorCall{Dir: dir, Name: name, Args: args}
 	m.calls = append(m.calls, call)
 
@@ -69,12 +76,18 @@ func (m *MockExecutor) Run(_ context.Context, dir string, name string, args ...s
 
 // GetCalls returns all recorded command calls.
 func (m *MockExecutor) GetCalls() []ExecutorCall {
-	return m.calls
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	calls := make([]ExecutorCall, len(m.calls))
+	copy(calls, m.calls)
+	return calls
 }
 
 // MustGetLastCall returns the last recorded call, fails the test if no calls were made.
 func (m *MockExecutor) MustGetLastCall(t *testing.T) ExecutorCall {
 	t.Helper()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if len(m.calls) == 0 {
 		t.Fatal("Expected at least one command call")
 	}

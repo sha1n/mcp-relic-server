@@ -258,9 +258,9 @@ func TestManifest_GetRepoState_New(t *testing.T) {
 		t.Error("Expected empty state for new repo")
 	}
 
-	// Verify it was added to the map
-	if !m.HasRepo("new_repo") {
-		t.Error("New repo should be added to manifest")
+	// GetRepoState returns a copy, does not add to the map
+	if m.HasRepo("new_repo") {
+		t.Error("GetRepoState should not add repo to manifest")
 	}
 }
 

@@ -36,7 +36,9 @@ var languagePatterns = map[string]LanguageRegex{
 			regexp.MustCompile(`class\s+(\w+)`),
 			regexp.MustCompile(`interface\s+(\w+)`),
 			regexp.MustCompile(`enum\s+(\w+)`),
-			regexp.MustCompile(`(?:public|protected|private|static|\s) +[\w\<\>\[\]]+\s+(\w+) *\(`), // Method
+			// Method: requires access modifier or annotation prefix, return type, then method name
+			// Excludes control flow keywords (if, while, for, switch, catch)
+			regexp.MustCompile(`(?:(?:public|protected|private|static|final|abstract|synchronized|native|default)\s+)+(?:<[^>]+>\s+)?[\w\[\].]+(?:<[^>]*>)?(?:\[\])?\s+(\w+)\s*\(`),
 		},
 	},
 	"js": {
@@ -70,7 +72,10 @@ var languagePatterns = map[string]LanguageRegex{
 	},
 	"c": {
 		Patterns: []*regexp.Regexp{
-			regexp.MustCompile(`(?m)^\s*\w+\s+(\w+)\s*\(.*\)\s*\{`), // Function definition
+			// Single-line function definition
+			regexp.MustCompile(`(?m)^(?:static\s+|extern\s+|inline\s+|const\s+)*[\w*]+\s+\*{0,2}(\w+)\s*\([^)]*\)\s*\{`),
+			// Multi-line function: return type + name on one line, params on next
+			regexp.MustCompile(`(?m)^(?:static\s+|extern\s+|inline\s+|const\s+)*[\w*]+\s+\*{0,2}(\w+)\s*\([^)]*$`),
 			regexp.MustCompile(`struct\s+(\w+)`),
 			regexp.MustCompile(`enum\s+(\w+)`),
 			regexp.MustCompile(`#define\s+(\w+)`),
@@ -81,7 +86,10 @@ var languagePatterns = map[string]LanguageRegex{
 			regexp.MustCompile(`class\s+(\w+)`),
 			regexp.MustCompile(`struct\s+(\w+)`),
 			regexp.MustCompile(`enum\s+(\w+)`),
-			regexp.MustCompile(`(?m)^\s*\w+\s+(\w+)\s*\(.*\)\s*\{`), // Function definition (simplified)
+			// Single-line function definition
+			regexp.MustCompile(`(?m)^(?:static\s+|extern\s+|inline\s+|virtual\s+|const\s+)*[\w*:]+\s+\*{0,2}(\w+)\s*\([^)]*\)\s*(?:const\s*)?\{`),
+			// Multi-line function
+			regexp.MustCompile(`(?m)^(?:static\s+|extern\s+|inline\s+|virtual\s+|const\s+)*[\w*:]+\s+\*{0,2}(\w+)\s*\([^)]*$`),
 		},
 	},
 }

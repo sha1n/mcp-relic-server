@@ -3,6 +3,7 @@ package gitrepos
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/blevesearch/bleve/v2"
@@ -113,8 +114,8 @@ func (h *SearchHandler) buildQuery(args SearchArgument) query.Query {
 	must := []query.Query{searchQuery}
 
 	if args.Repository != "" {
-		// Substring match on repository name
-		repoQuery := bleve.NewWildcardQuery("*" + args.Repository + "*")
+		// Substring match on repository name using regexp with escaped input
+		repoQuery := bleve.NewRegexpQuery(".*" + regexp.QuoteMeta(strings.ToLower(args.Repository)) + ".*")
 		repoQuery.SetField(domain.CodeFieldRepository)
 		must = append(must, repoQuery)
 	}
@@ -141,7 +142,7 @@ func (h *SearchHandler) formatResults(results *bleve.SearchResult, queryStr stri
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d results for '%s':\n\n", results.Total, queryStr))
+	fmt.Fprintf(&sb, "Found %d results for '%s':\n\n", results.Total, queryStr)
 
 	for i, hit := range results.Hits {
 		// Extract fields
@@ -159,13 +160,13 @@ func (h *SearchHandler) formatResults(results *bleve.SearchResult, queryStr stri
 		}
 
 		// Write result header
-		sb.WriteString(fmt.Sprintf("**%d. %s** `%s`\n", i+1, repo, filePath))
+		fmt.Fprintf(&sb, "**%d. %s** `%s`\n", i+1, repo, filePath)
 
 		// Add highlighted fragments with language-specific code fencing
 		if len(hit.Fragments) > 0 {
 			if fragments, ok := hit.Fragments[domain.CodeFieldContent]; ok {
 				lang := extensionToLanguage(ext)
-				sb.WriteString(fmt.Sprintf("```%s\n", lang))
+				fmt.Fprintf(&sb, "```%s\n", lang)
 				for _, fragment := range fragments {
 					sb.WriteString(fragment)
 					sb.WriteString("\n")
@@ -178,7 +179,7 @@ func (h *SearchHandler) formatResults(results *bleve.SearchResult, queryStr stri
 	}
 
 	if results.Total > uint64(len(results.Hits)) {
-		sb.WriteString(fmt.Sprintf("... and %d more results\n", results.Total-uint64(len(results.Hits))))
+		fmt.Fprintf(&sb, "... and %d more results\n", results.Total-uint64(len(results.Hits)))
 	}
 
 	return &mcp.CallToolResult{
